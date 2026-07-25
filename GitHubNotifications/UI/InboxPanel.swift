@@ -228,6 +228,10 @@ struct InboxPanel: View {
                 }
                 .appButton(.standard)
             }
+
+            Divider()
+
+            UpdateStatusView(session: session)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
