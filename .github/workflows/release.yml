@@ -10,23 +10,105 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Pinned rather than macos-latest: a 26.0 deployment target needs the macOS
+    # 26 SDK, and a runner rolling back to an older image would fail the build.
+    runs-on: macos-26
+
+    env:
+      SIGNING_IDENTITY: GitHub Notifications Signing
 
     steps:
       - uses: actions/checkout@v4
 
+      # A tag carrying a suffix (v1.2.0-beta.1) publishes as a pre-release, so it
+      # never becomes the release the updater offers to everyone.
       - name: Derive version from tag
         id: version
-        run: echo "number=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          NUMBER="${GITHUB_REF_NAME#v}"
+
+          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+
+          # CFBundleVersion only accepts period-separated integers, so a
+          # pre-release suffix is dropped from it.
+          echo "build=${NUMBER%%-*}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The certificate gives the app a designated requirement that survives
+      # rebuilds, so keychain access is granted once rather than after every
+      # update. The runner keychain is temporary and deleted below.
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.SIGNING_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if [[ -z "${CERTIFICATE_P12}" ]]; then
+            echo "::error::SIGNING_CERTIFICATE_P12 is not set, refusing to publish an unsigned build"
+            exit 1
+          fi
+
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" signing.keychain
+          security set-keychain-settings -lut 3600 signing.keychain
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" signing.keychain
+          security list-keychains -d user -s signing.keychain login.keychain-db
+
+          echo "${CERTIFICATE_P12}" | base64 --decode > certificate.p12
+          security import certificate.p12 \
+            -k signing.keychain \
+            -P "${CERTIFICATE_PASSWORD}" \
+            -T /usr/bin/codesign \
+            -f pkcs12
+          rm certificate.p12
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "${KEYCHAIN_PASSWORD}" signing.keychain >/dev/null
 
       - name: Build
-        run: ./scripts/build.sh release MARKETING_VERSION=${{ steps.version.outputs.number }}
+        run: |
+          ./scripts/build.sh release \
+            MARKETING_VERSION=${{ steps.version.outputs.number }} \
+            CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build }}
 
+      # Publishing an unsigned build would silently reset every installed copy's
+      # keychain grant, so a missing or wrong signature fails the release.
+      - name: Verify signature
+        run: |
+          APP="build/Build/Products/Release/GitHub Notifications.app"
+
+          codesign --verify --strict --verbose=2 "${APP}"
+
+          codesign -dv --verbose=4 "${APP}" 2>&1 \
+            | grep -q "Authority=${SIGNING_IDENTITY}" \
+            || { echo "::error::release build is not signed with the expected identity"; exit 1; }
+
+          codesign -d -r- "${APP}"
+
+      # The zip is what the updater downloads; ditto round-trips a bundle
+      # without losing the signature. The DMG is for people.
       - name: Package
         run: |
-          ditto -c -k --keepParent \
-            "build/Build/Products/Release/GitHub Notifications.app" \
-            GitHubNotifications-${{ steps.version.outputs.number }}.zip
+          APP="build/Build/Products/Release/GitHub Notifications.app"
+          VERSION="${{ steps.version.outputs.number }}"
+
+          ditto -c -k --keepParent "${APP}" "GitHubNotifications-${VERSION}.zip"
+
+          mkdir -p dmg
+          cp -R "${APP}" dmg/
+          ln -s /Applications dmg/Applications
+
+          hdiutil create \
+            -volname "GitHub Notifications" \
+            -srcfolder dmg \
+            -ov -format UDZO \
+            "GitHubNotifications-${VERSION}.dmg"
 
       - name: Publish release
         env:
@@ -34,5 +116,13 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             "GitHubNotifications-${{ steps.version.outputs.number }}.zip" \
+            "GitHubNotifications-${{ steps.version.outputs.number }}.dmg" \
             --title "${GITHUB_REF_NAME}" \
-            --notes "The app is ad-hoc signed and not notarised. After unzipping, open it once with right-click → Open, or run \`xattr -d com.apple.quarantine GitHubNotifications.app\`."
+            ${{ steps.version.outputs.prerelease }} \
+            --notes "The app is signed but not notarised, because notarisation needs a paid Apple Developer ID. After opening the DMG or unzipping, open it once with right-click → Open, or run \`xattr -d com.apple.quarantine \"/Applications/GitHub Notifications.app\"\`."
+
+      - name: Delete signing keychain
+        if: always()
+        run: |
+          security list-keychains -d user -s login.keychain-db
+          security delete-keychain signing.keychain || true

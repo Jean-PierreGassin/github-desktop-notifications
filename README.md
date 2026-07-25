@@ -68,11 +68,13 @@ Use `public_repo` instead of `repo` if you only care about public repositories.
 
 ## Install
 
-Download the latest zip from [Releases](../../releases), unzip it, and move `GitHub Notifications.app` to
-`/Applications`.
+Requires macOS 26 or newer.
 
-Releases are ad-hoc signed and **not notarised**, because notarisation requires a paid Apple Developer ID. macOS will
-quarantine the download. Open it once with right-click → **Open**, or clear the flag:
+Download the latest DMG from [Releases](../../releases) and drag `GitHub Notifications.app` to `/Applications`. The
+zip beside it is what the app's own updater downloads; either works.
+
+Releases are signed with a self-signed certificate and **not notarised**, because notarisation requires a paid Apple
+Developer ID. macOS will quarantine the download. Open it once with right-click → **Open**, or clear the flag:
 
 ```sh
 xattr -d com.apple.quarantine "/Applications/GitHub Notifications.app"
@@ -96,7 +98,7 @@ organisation administrator is involved in that step.
 
 ## Build from source
 
-Requires Xcode 26 or newer, on macOS 14 or newer.
+Requires Xcode 26 or newer, on macOS 26 or newer.
 
 ```sh
 git clone https://github.com/Jean-PierreGassin/github-desktop-notifications.git
@@ -107,8 +109,54 @@ open "build/Build/Products/Release/GitHub Notifications.app"
 
 Run the test suite with `./scripts/test.sh`.
 
-Builds are ad-hoc signed, so each rebuild has a different code signature and macOS asks once per build before reading
-your token from the keychain. Choose **Always Allow**, or sign with a stable identity if you are iterating often.
+A clone builds without any certificate, ad-hoc signed, and the build warns when it does. See below for why that costs
+you a keychain prompt per rebuild, and how to stop it.
+
+## Building and signing
+
+### Why the app is signed at all
+
+Not for Gatekeeper. A self-signed certificate does nothing for notarisation, and the quarantine step above still
+applies. It is for the keychain.
+
+When the app first reads your token, macOS records an access control list entry naming the program allowed to read it.
+The program is identified by its **designated requirement**, not its path. An ad-hoc signature's designated requirement
+is a hash of the built code, so it changes on every single build, and macOS treats the next build as a different
+program: **Always Allow** is forgotten, and you are asked again. That is merely annoying while developing, and it would
+be much worse once the app updates itself, since every update would prompt every user.
+
+A certificate replaces that hash with a stable requirement naming the certificate, which survives rebuilds. Apple's
+[TN2206](https://developer.apple.com/library/archive/technotes/tn2206/_index.html) is explicit that the keychain cares
+about stability rather than about who issued the certificate, so a self-signed one is enough.
+
+### Creating the certificate
+
+```sh
+./scripts/create-signing-certificate.sh
+```
+
+It generates a self-signed code signing certificate, imports it into your login keychain, trusts it for code signing,
+and prints the private key as base64 for the repository secrets. Then build with it:
+
+```sh
+SIGNING_IDENTITY="GitHub Notifications Signing" ./scripts/build.sh release
+```
+
+Releases are signed the same way. `.github/workflows/release.yml` imports the certificate from the
+`SIGNING_CERTIFICATE_P12` and `SIGNING_CERTIFICATE_PASSWORD` secrets into a temporary keychain, and **fails the release**
+rather than publishing a build that is unsigned or signed by anything else.
+
+### Rotating the key
+
+The Actions secret is the only copy of the private key. If it is lost or exposed:
+
+1. Delete `GitHub Notifications Signing` from Keychain Access
+2. Run `./scripts/create-signing-certificate.sh` again
+3. Replace both repository secrets with the values it prints
+
+The consequence is unavoidable: the designated requirement changes, so every installed copy re-asks for keychain access
+once, and macOS treats the app as new for notification and open-at-login permission. It is the same one-off cost as the
+move from ad-hoc signing.
 
 ## Contributing
 
