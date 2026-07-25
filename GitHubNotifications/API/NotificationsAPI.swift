@@ -11,25 +11,38 @@ extension GitHubClient {
     private static let threadsPerPage = 50
     private static let pageLimit = 5
 
+    /// Asks conditionally first, then fetches the whole inbox when something has
+    /// changed.
+    ///
+    /// A conditional request is worth making because a `304` is free, but the
+    /// `200` that follows a change is **not** the full inbox: GitHub answers with
+    /// only the threads updated since the given timestamp. Treating that delta as
+    /// the whole inbox silently drops every notification that did not just
+    /// change, so the real list is always re-read unconditionally.
     func fetchNotifications(usingToken token: String, since lastModified: String?) async throws -> NotificationsResponse {
+        if let lastModified {
+            let probe = makeRequest(path: "/notifications", token: token, lastModified: lastModified)
+            let (_, probeResponse, probeHeaders) = try await send(probe)
+            try throwIfUnsuccessful(response: probeResponse, headers: probeHeaders)
+
+            guard probeResponse.statusCode != 304 else {
+                return NotificationsResponse(
+                    threads: [],
+                    isUnchanged: true,
+                    lastModified: lastModified,
+                    pollInterval: probeHeaders.pollInterval,
+                )
+            }
+        }
+
         let firstPageRequest = makeRequest(
             path: "/notifications",
             token: token,
             queryItems: [URLQueryItem(name: "per_page", value: String(Self.threadsPerPage))],
-            lastModified: lastModified,
         )
 
         let (firstPageData, firstPageResponse, firstPageHeaders) = try await send(firstPageRequest)
         try throwIfUnsuccessful(response: firstPageResponse, headers: firstPageHeaders)
-
-        guard firstPageResponse.statusCode != 304 else {
-            return NotificationsResponse(
-                threads: [],
-                isUnchanged: true,
-                lastModified: lastModified,
-                pollInterval: firstPageHeaders.pollInterval,
-            )
-        }
 
         var threads = try decodeThreads(from: firstPageData)
         var nextPageURL = firstPageHeaders.nextPageURL

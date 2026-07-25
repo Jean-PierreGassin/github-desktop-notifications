@@ -29,8 +29,20 @@ struct GitHubClient: GitHubAPI {
 
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
+    /// The client does its own conditional requests with `If-Modified-Since`, so
+    /// it needs an uncached session. `URLSession.shared` keeps a disk cache and
+    /// will happily replay a stale inbox, which looks exactly like notifications
+    /// never arriving.
+    init(session: URLSession = GitHubClient.makeUncachedSession()) {
         self.session = session
+    }
+
+    static func makeUncachedSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+
+        return URLSession(configuration: configuration)
     }
 
     func fetchAuthenticatedUser(usingToken token: String) async throws -> AuthenticatedUser {
@@ -70,6 +82,7 @@ struct GitHubClient: GitHubAPI {
     ) -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue(Self.apiVersion, forHTTPHeaderField: "X-GitHub-Api-Version")

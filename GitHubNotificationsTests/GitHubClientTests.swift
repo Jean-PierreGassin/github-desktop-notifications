@@ -46,6 +46,28 @@ struct GitHubClientTests {
         #expect(StubURLProtocol.receivedRequests[0].value(forHTTPHeaderField: "If-Modified-Since") == "earlier")
     }
 
+    /// A conditional 200 carries only what changed, so the whole inbox has to be
+    /// re-read or every unchanged notification disappears from the panel.
+    @Test
+    func rereadsTheWholeInboxAfterAConditionalRequestReportsAChange() async throws {
+        StubURLProtocol.respond = { _ in .init(body: Self.notificationJSON) }
+
+        _ = try await makeClient().fetchNotifications(usingToken: "token", since: "earlier")
+
+        #expect(StubURLProtocol.receivedRequests.count == 2)
+        #expect(StubURLProtocol.receivedRequests[0].value(forHTTPHeaderField: "If-Modified-Since") == "earlier")
+        #expect(StubURLProtocol.receivedRequests[1].value(forHTTPHeaderField: "If-Modified-Since") == nil)
+    }
+
+    @Test
+    func asksOnlyOnceWhenThereIsNoPreviousTimestamp() async throws {
+        StubURLProtocol.respond = { _ in .init(body: Self.notificationJSON) }
+
+        _ = try await makeClient().fetchNotifications(usingToken: "token", since: nil)
+
+        #expect(StubURLProtocol.receivedRequests.count == 1)
+    }
+
     @Test
     func reportsAnUnchangedInboxWithoutTouchingTheStoredThreads() async throws {
         StubURLProtocol.respond = { _ in .init(statusCode: 304, body: "") }
