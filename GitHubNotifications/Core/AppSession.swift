@@ -18,6 +18,7 @@ final class AppSession {
     let behaviourPreferences: BehaviourPreferences
     let heldAlerts: HeldAlertQueue
     let launchAtLogin: LaunchAtLogin
+    let avatars: AvatarCache
 
     static let defaultRowsPerRepository = 5
 
@@ -87,6 +88,7 @@ final class AppSession {
         heldAlerts = HeldAlertQueue(log: log)
         launchAtLogin = LaunchAtLogin(log: log)
         ledger = SeenThreadLedger(fileURL: supportDirectory?.appending(path: "seen-threads.json"), log: log)
+        avatars = AvatarCache(directory: supportDirectory?.appending(path: "avatars"), log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
     }
 

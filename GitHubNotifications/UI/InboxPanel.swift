@@ -4,12 +4,19 @@ import SwiftUI
 struct InboxPanel: View {
     private static let panelWidth: CGFloat = 410
 
+    /// The panel is a popover, not a window: past about three quarters of the
+    /// screen it stops growing and scrolls instead of running off the display.
+    private static let maximumScreenFraction: CGFloat = 0.75
+    private static let fallbackMaximumHeight: CGFloat = 700
+    private static let overflowFadeHeight: CGFloat = 24
+
     let session: AppSession
 
     @Environment(\.openWindow) private var openWindow
 
     @State private var now = Date()
     @State private var isConfirmingBulkAction = false
+    @State private var listHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -52,14 +59,12 @@ struct InboxPanel: View {
 
             Spacer()
 
-            if let error = session.poller.lastError {
+            if session.poller.lastError != nil {
+                // The only signal left that polling is unhealthy, now that there
+                // is no refresh button to press, so it carries the resume time.
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                    .help(error.userFacingMessage)
-            }
-
-            if session.auth.isSignedIn {
-                refreshButton
+                    .help(pollingProblemDescription)
             }
 
             Button(action: openSettings) {
@@ -70,30 +75,12 @@ struct InboxPanel: View {
         }
     }
 
-    private var refreshButton: some View {
-        Button {
-            Task { await session.poller.refreshNow() }
-        } label: {
-            Image(systemName: "arrow.clockwise")
-        }
-        .buttonStyle(.plain)
-        .disabled(!session.poller.canRefreshNow)
-        .foregroundStyle(session.poller.canRefreshNow ? .primary : .tertiary)
-        .help(refreshHelpText)
-    }
-
-    private var refreshHelpText: String {
-        guard !session.poller.isFetching else {
-            return "Checking GitHub"
+    private var pollingProblemDescription: String {
+        guard let error = session.poller.lastError else {
+            return ""
         }
 
-        guard !session.poller.canRefreshNow else {
-            return "Check GitHub now"
-        }
-
-        let secondsRemaining = Int(session.poller.nextPollDueAt.timeIntervalSince(now).rounded(.up))
-
-        return "GitHub sets the pace here. Next check in \(max(secondsRemaining, 0))s."
+        return "\(error.userFacingMessage)\n\nTrying again \(nextCheckDescription)."
     }
 
     private var notificationsBlockedWarning: some View {
@@ -143,14 +130,35 @@ struct InboxPanel: View {
         }
     }
 
-    /// The panel grows with its contents rather than scrolling, so the list is
-    /// bounded by repository as well as by row.
+    /// Every repository is listed. Below the height cap the panel sizes to its
+    /// contents exactly as before, so the list is not in a scroll view at all;
+    /// past the cap it moves into one at a definite height.
+    ///
+    /// The order matters. A scroll view given no definite height inside a menu
+    /// bar window collapses and shows nothing, so the measurement has to come
+    /// from the plain list rather than from inside the scroll view.
+    @ViewBuilder
     private var notificationList: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(session.store.visibleGroups) { group in
+        if listHeight > Self.maximumListHeight {
+            ScrollView {
+                groupList
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: Self.maximumListHeight)
+            .overlay(alignment: .bottom) { overflowFade }
+        } else {
+            groupList
+        }
+    }
+
+    private var groupList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(session.store.groups.enumerated()), id: \.element.id) { index, group in
                 RepositoryGroupView(
                     group: group,
                     clickBehaviour: session.behaviourPreferences.clickBehaviour,
+                    avatars: session.avatars,
+                    showsDivider: index > 0,
                     onOpenThread: session.open,
                     onApplyToThread: { behaviour, thread in
                         Task { await session.apply(behaviour, to: thread) }
@@ -158,18 +166,32 @@ struct InboxPanel: View {
                     onOpenInbox: session.openInbox,
                 )
             }
-
-            if session.store.hiddenRepositoryCount > 0 {
-                Button(action: session.openInbox) {
-                    Text("\(session.store.hiddenRepositoryCount) more repositories")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                }
-                .buttonStyle(.plain)
-                .help("Open your inbox on github.com to see the rest")
-            }
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { height in
+            listHeight = height
+        }
+    }
+
+    /// Roughly three quarters of the screen the panel is on, so a long inbox
+    /// still leaves the desktop visible.
+    private static var maximumListHeight: CGFloat {
+        guard let visibleHeight = NSScreen.main?.visibleFrame.height else {
+            return fallbackMaximumHeight
+        }
+
+        return visibleHeight * maximumScreenFraction
+    }
+
+    /// An overlay scroll bar only appears once you are already scrolling, which
+    /// is no use as a sign that there is more below.
+    private var overflowFade: some View {
+        LinearGradient(
+            colors: [.clear, Color(nsColor: .windowBackgroundColor)],
+            startPoint: .top,
+            endPoint: .bottom,
+        )
+        .frame(height: Self.overflowFadeHeight)
+        .allowsHitTesting(false)
     }
 
     private var emptyState: some View {
@@ -239,17 +261,31 @@ struct InboxPanel: View {
         }
     }
 
+    /// What happens next rather than what happened last: with no refresh button
+    /// to press, when the next check lands is the only thing worth saying.
     private var statusSummary: String {
         let unreadCount = session.store.unreadCount
         let unreadSummary = unreadCount == 1 ? "1 unread" : "\(unreadCount) unread"
 
-        guard let lastSuccessAt = session.poller.lastSuccessAt else {
-            return unreadSummary
+        return "\(unreadSummary) · \(nextCheckDescription)"
+    }
+
+    private var nextCheckDescription: String {
+        guard !session.poller.isFetching else {
+            return "checking now"
         }
 
-        let secondsAgo = Int(now.timeIntervalSince(lastSuccessAt))
+        let secondsRemaining = Int(session.poller.nextPollDueAt.timeIntervalSince(now).rounded(.up))
 
-        return "\(unreadSummary) · checked \(secondsAgo)s ago"
+        guard secondsRemaining > 0 else {
+            return "checking shortly"
+        }
+
+        guard session.poller.lastError == nil else {
+            return "paused, next check in \(secondsRemaining)s"
+        }
+
+        return "next check in \(secondsRemaining)s"
     }
 
     private func openSettings() {

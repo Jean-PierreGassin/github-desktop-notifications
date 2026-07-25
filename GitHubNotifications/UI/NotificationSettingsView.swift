@@ -23,8 +23,6 @@ struct NotificationSettingsView: View {
                 notificationContent
 
                 behaviour
-
-                clicks
             }
             .formStyle(.grouped)
 
@@ -96,6 +94,9 @@ struct NotificationSettingsView: View {
         }
     }
 
+    /// Clicking is behaviour too, so it sits in this section rather than one of
+    /// its own, kept apart by a rule because it answers a different question
+    /// from the two rows above it.
     private var behaviour: some View {
         Section {
             Toggle("Stack notifications by repository", isOn: contentBinding(\.groupsByRepository))
@@ -109,35 +110,38 @@ struct NotificationSettingsView: View {
             }
             .disabled(!session.notificationContentPreferences.settings.playsSound)
             .padding(.leading, Self.dependentIndent)
+
+            Divider()
+
+            clicks
         } header: {
-            SettingsSectionHeader(title: "Behaviour") { session.notificationContentPreferences.resetBehaviour() }
+            SettingsSectionHeader(title: "Behaviour", reset: resetBehaviour)
         } footer: {
-            Text("Stacking keeps a busy repository to one banner. Choosing a sound plays it.")
+            Text("Stacking keeps a busy repository to one banner. Choosing a sound plays it. The click setting drives "
+                + "the button on a row and the one under the panel alike, and any single notification can still be "
+                + "handled another way from its right-click menu.")
                 .foregroundStyle(.secondary)
         }
     }
 
-    /// What a click does lives here rather than on the General tab: it belongs
+    private func resetBehaviour() {
+        session.notificationContentPreferences.resetBehaviour()
+        session.behaviourPreferences.resetToDefaults()
+    }
+
+    /// What a click does lives on this tab rather than in General: it belongs
     /// with the notifications it acts on, and General is about the app itself.
     private var clicks: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("When notifications are clicked, mark them as")
+        VStack(alignment: .leading, spacing: 10) {
+            Text("When notifications are clicked, mark them as")
 
-                ClickBehaviourPicker(selection: clickBehaviourBinding)
-            }
-            .padding(6)
-            .background(
-                isHighlighted ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.clear),
-                in: RoundedRectangle(cornerRadius: 8),
-            )
-        } header: {
-            SettingsSectionHeader(title: "Clicks") { session.behaviourPreferences.resetToDefaults() }
-        } footer: {
-            Text("The same choice drives the button on a row and the one under the panel, so they never disagree. "
-                + "Any single notification can still be handled another way from its right-click menu.")
-                .foregroundStyle(.secondary)
+            ClickBehaviourPicker(selection: clickBehaviourBinding)
         }
+        .padding(6)
+        .background(
+            isHighlighted ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.clear),
+            in: RoundedRectangle(cornerRadius: 8),
+        )
         .task(id: session.highlightedSettingsField == nil) { await fadeOutHighlight() }
     }
 

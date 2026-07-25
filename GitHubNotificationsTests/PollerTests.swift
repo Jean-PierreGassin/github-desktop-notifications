@@ -14,32 +14,21 @@ struct PollerTests {
         api.notificationsResult = .success(makeResponse(pollInterval: requestedInterval))
         let context = await makeContext(api: api)
 
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         #expect(context.poller.pollInterval == expectedInterval)
     }
 
     @Test
-    func locksManualRefreshUntilTheIntervalHasElapsed() async {
-        let context = await makeContext()
-
-        #expect(context.poller.canRefreshNow)
-
-        await context.poller.refreshNow()
-
-        #expect(!context.poller.canRefreshNow)
-        #expect(context.poller.nextPollDueAt > Date())
-    }
-
-    @Test
-    func ignoresARefreshRequestedTooSoon() async {
+    func waitsForGitHubsIntervalBeforePollingAgain() async {
         let api = FakeGitHubAPI()
         let context = await makeContext(api: api)
 
-        await context.poller.refreshNow()
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
+        await context.poller.pollIfDue()
 
         #expect(api.fetchCount == 1)
+        #expect(context.poller.nextPollDueAt > Date())
     }
 
     @Test
@@ -52,7 +41,7 @@ struct PollerTests {
             log: AppLog(subsystem: "tests"),
         )
 
-        await poller.refreshNow()
+        await poller.pollIfDue()
 
         #expect(api.fetchCount == 0)
     }
@@ -62,11 +51,11 @@ struct PollerTests {
         let api = FakeGitHubAPI()
         api.notificationsResult = .success(makeResponse(threads: [Fixtures.thread(id: "a")]))
         let context = await makeContext(api: api)
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         api.notificationsResult = .success(makeResponse(isUnchanged: true))
         context.poller.reset()
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         #expect(context.store.threads.map(\.id) == ["a"])
     }
@@ -76,11 +65,11 @@ struct PollerTests {
         let api = FakeGitHubAPI()
         api.notificationsResult = .success(makeResponse(threads: [Fixtures.thread(id: "a")]))
         let context = await makeContext(api: api)
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         api.notificationsResult = .failure(.invalidToken)
         context.poller.reset()
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         #expect(context.poller.lastError == .invalidToken)
         #expect(context.store.threads.isEmpty)
@@ -94,11 +83,10 @@ struct PollerTests {
         api.notificationsResult = .failure(.rateLimited(resetAt: resetAt))
         let context = await makeContext(api: api)
 
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         #expect(context.poller.lastError == .rateLimited(resetAt: resetAt))
         #expect(context.poller.nextPollDueAt == resetAt)
-        #expect(!context.poller.canRefreshNow)
     }
 
     @Test
@@ -106,13 +94,13 @@ struct PollerTests {
         let api = FakeGitHubAPI()
         api.notificationsResult = .failure(.serverFailure(statusCode: 500))
         let context = await makeContext(api: api)
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         #expect(context.poller.lastError == .serverFailure(statusCode: 500))
 
         api.notificationsResult = .success(makeResponse())
         context.poller.reset()
-        await context.poller.refreshNow()
+        await context.poller.pollIfDue()
 
         #expect(context.poller.lastError == nil)
         #expect(context.poller.lastSuccessAt != nil)

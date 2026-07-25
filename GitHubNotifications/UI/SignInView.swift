@@ -102,7 +102,7 @@ struct SignInView: View {
                     .onSubmit(submit)
 
                 Button("Sign in", action: submit)
-                    .buttonStyle(.borderedProminent)
+                    .appButton(.primary)
                     .disabled(!canSubmit)
                     .help(submitHelpText)
             }

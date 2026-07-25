@@ -42,16 +42,6 @@ final class Poller {
         self.log = log
     }
 
-    /// Manual refresh stays locked until GitHub's own poll interval has elapsed,
-    /// so a click cannot cost rate limit.
-    var canRefreshNow: Bool {
-        guard !isFetching, auth.activeToken != nil else {
-            return false
-        }
-
-        return Date() >= nextPollDueAt
-    }
-
     var nextPollDueAt: Date {
         guard let lastAttemptAt else {
             return .distantPast
@@ -87,15 +77,10 @@ final class Poller {
         pollInterval = Self.shortestPollInterval
     }
 
-    func refreshNow() async {
-        guard canRefreshNow else {
-            return
-        }
-
-        await poll()
-    }
-
-    private func pollIfDue() async {
+    /// Polls if GitHub's own interval has elapsed. There is no manual refresh:
+    /// the loop ticks every second, so a button would be enabled for at most a
+    /// second per cycle and never when it mattered.
+    func pollIfDue() async {
         guard auth.activeToken != nil, !isFetching, Date() >= nextPollDueAt else {
             return
         }

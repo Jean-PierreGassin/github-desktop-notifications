@@ -7,9 +7,15 @@ final class StubURLProtocol: URLProtocol {
     struct StubbedResponse {
         let statusCode: Int
         let headers: [String: String]
-        let body: String
+        let body: Data
 
         init(statusCode: Int = 200, headers: [String: String] = [:], body: String = "[]") {
+            self.init(statusCode: statusCode, headers: headers, body: Data(body.utf8))
+        }
+
+        /// Binary bodies (an avatar, say) cannot survive a round trip through a
+        /// `String`, so they are stubbed as bytes.
+        init(statusCode: Int = 200, headers: [String: String] = [:], body: Data) {
             self.statusCode = statusCode
             self.headers = headers
             self.body = body
@@ -44,7 +50,7 @@ final class StubURLProtocol: URLProtocol {
         )!
 
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(stubbed.body.utf8))
+        client?.urlProtocol(self, didLoad: stubbed.body)
         client?.urlProtocolDidFinishLoading(self)
     }
 

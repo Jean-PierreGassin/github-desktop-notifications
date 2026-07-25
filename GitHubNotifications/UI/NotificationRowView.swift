@@ -2,6 +2,11 @@ import AppKit
 import SwiftUI
 
 struct NotificationRowView: View {
+    /// Every row icon occupies the same box, so a light glyph and a heavy one
+    /// still start at the same place.
+    private static let iconSide: CGFloat = 18
+    private static let unreadDotSide: CGFloat = 7
+
     let thread: NotificationThread
     let clickBehaviour: ClickBehaviour
     let onOpen: () -> Void
@@ -43,30 +48,44 @@ struct NotificationRowView: View {
 
             Divider()
 
-            // All three stay reachable here, so doing something once never means
-            // changing the setting and changing it back.
-            ForEach(ClickBehaviour.allCases, id: \.self) { behaviour in
+            // Everything still applicable stays reachable here, so doing
+            // something once never means changing the setting and changing it
+            // back. A row already read has nothing left but dismissing.
+            ForEach(applicableBehaviours, id: \.self) { behaviour in
                 Button(behaviour.actionTitle) { onApply(behaviour) }
             }
         }
     }
 
+    private var applicableBehaviours: [ClickBehaviour] {
+        thread.isUnread ? ClickBehaviour.allCases : [.dismissed]
+    }
+
+    /// A read row cannot be marked read again, so its button says the one thing
+    /// left to do with it rather than repeating the setting.
+    private var rowBehaviour: ClickBehaviour {
+        thread.isUnread ? clickBehaviour : .dismissed
+    }
+
+    /// Title first, and everything on the title's first baseline: the icon, the
+    /// text and the dot all measured from one line rather than three.
     private var rowContent: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: thread.reason.symbolName)
-                .font(.callout)
+                .imageScale(.medium)
                 .foregroundStyle(thread.reason.priorityRank == 0 ? .primary : .secondary)
-                .frame(width: 16)
+                .frame(width: Self.iconSide, height: Self.iconSide)
+                .alignmentGuide(.firstTextBaseline) { dimensions in dimensions[VerticalAlignment.center] + 4 }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(thread.reason.displayName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 Text(thread.subject.title)
                     .font(.body)
                     .lineLimit(1)
                     .truncationMode(.tail)
+
+                Text(thread.reason.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 4)
@@ -74,8 +93,8 @@ struct NotificationRowView: View {
             if thread.isUnread {
                 Circle()
                     .fill(.tint)
-                    .frame(width: 7, height: 7)
-                    .padding(.top, 6)
+                    .frame(width: Self.unreadDotSide, height: Self.unreadDotSide)
+                    .alignmentGuide(.firstTextBaseline) { dimensions in dimensions[VerticalAlignment.center] + 2 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -86,13 +105,12 @@ struct NotificationRowView: View {
     /// can never disagree. The rest of the actions live in the context menu.
     private var actions: some View {
         HStack(spacing: 6) {
-            Button(clickBehaviour.actionTitle) { onApply(clickBehaviour) }
-                .appButton(.standard, size: .small)
-                .help("Does this without opening it. \(clickBehaviour.explanation)")
-
             Spacer(minLength: 0)
+
+            Button(rowBehaviour.actionTitle) { onApply(rowBehaviour) }
+                .appButton(.standard, size: .small)
+                .help("Does this without opening it. \(rowBehaviour.explanation)")
         }
-        .padding(.leading, 24)
     }
 
     /// The row truncates, so the tooltip carries everything in full.
