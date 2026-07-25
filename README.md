@@ -51,6 +51,8 @@ nothing while your inbox is quiet, and it speaks up when it is not.
 - **You decide what a click does**: mark it read and keep it in view, dismiss it, or both.
 - **Links that open the right page**: a pull request opens at the pull request, a comment opens at the comment.
 - **Private and organisation repositories**, including SAML single sign-on, with no administrator involved.
+- **Updates itself** from this repository's releases, checking once a day, always asking first, and refusing anything
+  not signed by the same certificate as the copy you are running.
 
 ## Install
 
@@ -67,6 +69,13 @@ xattr -d com.apple.quarantine "/Applications/GitHub Notifications.app"
 ```
 
 Building from source avoids this entirely.
+
+After that, the app updates itself: it checks this repository's releases once a day and asks before installing
+anything, refusing any download not signed by the same certificate as the copy you are running.
+
+**One release cannot arrive that way.** Builds before the switch to a signed identity were ad-hoc signed, so their
+signature does not match, and the updater is right to refuse it. Download that one by hand; everything after it
+updates in place.
 
 ## Setup
 

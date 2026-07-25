@@ -38,15 +38,49 @@ struct BehaviourSettingsView: View {
         }
     }
 
-    /// The section the update controls land in. Until then it carries the one
-    /// fact it can already answer, which is what you are running.
+    /// Checking is on by default and asks no permission. Installing always
+    /// asks, which is why there is no install control here: that conversation
+    /// belongs in the panel, next to the version it would replace.
     private var updates: some View {
-        Section("Updates") {
+        Section {
+            Toggle("Check for updates automatically", isOn: checksAutomaticallyBinding)
+
             LabeledContent("Version") {
-                Text(AppVersion.current)
+                Text(session.updates.installedVersion)
                     .foregroundStyle(.secondary)
             }
+
+            LabeledContent("Last checked") {
+                Text(lastCheckedDescription)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button("Check Now") {
+                Task { await session.updates.check(usingToken: session.auth.activeToken, isManual: true) }
+            }
+            .appButton(.standard, size: .small)
+        } header: {
+            SettingsSectionHeader(title: "Updates") { session.updatePreferences.resetToDefaults() }
+        } footer: {
+            Text("Updates come from this project's GitHub releases, once a day, and are never installed without "
+                + "asking you first.")
+                .foregroundStyle(.secondary)
         }
+    }
+
+    private var lastCheckedDescription: String {
+        guard let lastCheckedAt = session.updatePreferences.lastCheckedAt else {
+            return "Not yet"
+        }
+
+        return lastCheckedAt.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private var checksAutomaticallyBinding: Binding<Bool> {
+        Binding(
+            get: { session.updatePreferences.checksAutomatically },
+            set: { session.updatePreferences.checksAutomatically = $0 },
+        )
     }
 
     /// Nothing here is a preference, so there is nothing to reset. The token is

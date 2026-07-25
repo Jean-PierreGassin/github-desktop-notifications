@@ -19,6 +19,8 @@ final class AppSession {
     let heldAlerts: HeldAlertQueue
     let launchAtLogin: LaunchAtLogin
     let avatars: AvatarCache
+    let updatePreferences: UpdatePreferences
+    let updates: UpdateChecker
 
     static let defaultRowsPerRepository = 5
 
@@ -64,6 +66,7 @@ final class AppSession {
     init(
         log: AppLog = AppLog.shared,
         api: GitHubAPI = GitHubClient(),
+        releases: ReleaseSource = GitHubClient(),
         storage: TokenStorage = KeychainTokenStorage(),
         defaults: UserDefaults = .standard,
         supportDirectory: URL? = nil,
@@ -89,6 +92,8 @@ final class AppSession {
         launchAtLogin = LaunchAtLogin(log: log)
         ledger = SeenThreadLedger(fileURL: supportDirectory?.appending(path: "seen-threads.json"), log: log)
         avatars = AvatarCache(directory: supportDirectory?.appending(path: "avatars"), log: log)
+        updatePreferences = UpdatePreferences(defaults: defaults)
+        updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
     }
 
@@ -130,7 +135,7 @@ final class AppSession {
             return
         }
 
-        log.info("GitHub Notifications started.")
+        log.info("GitHub Notifications \(AppVersion.current) started.")
 
         connectAlerts()
         notifier.installClickHandler()
@@ -144,8 +149,26 @@ final class AppSession {
             await reconcileReadThreads()
         }
 
+        installPendingUpdateOnQuit()
         startHeldAlertLoop()
         startReconciliationLoop()
+
+        // After the poller, so a launch never fires two calls at once.
+        await updates.checkIfDue(usingToken: auth.activeToken)
+    }
+
+    /// The swap runs from a script that waits for this process to exit, so all
+    /// that is needed here is to start it on the way out.
+    private func installPendingUpdateOnQuit() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updates.performPendingInstallOnQuit()
+            }
+        }
     }
 
     /// Polling stays unread-only and conditional, which is what makes an idle
@@ -160,6 +183,10 @@ final class AppSession {
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.reconciliationInterval)
                 await self?.reconcileReadThreads()
+
+                // The checker keeps its own daily floor; this only gives it the
+                // chance to notice a day has passed without a relaunch.
+                await self?.updates.checkIfDue(usingToken: self?.auth.activeToken)
             }
         }
     }

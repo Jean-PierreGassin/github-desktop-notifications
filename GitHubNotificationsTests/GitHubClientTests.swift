@@ -164,6 +164,59 @@ struct GitHubClientTests {
         #expect(StubURLProtocol.receivedRequests[0].value(forHTTPHeaderField: "Authorization") == "Bearer secret")
     }
 
+    @Test
+    func asksForTheLatestReleaseWithoutSpendingTheUsersRateLimit() async throws {
+        StubURLProtocol.respond = { _ in .init(body: Self.releaseJSON) }
+
+        let release = try await makeClient().fetchLatestRelease(usingToken: "secret")
+
+        #expect(release?.version == "1.3.0")
+        #expect(release?.downloadURL.lastPathComponent == "GitHubNotifications-1.3.0.zip")
+        #expect(StubURLProtocol.receivedRequests[0].value(forHTTPHeaderField: "Authorization") == nil)
+    }
+
+    @Test
+    func fallsBackToTheTokenOnceWhenTheAnonymousLimitIsHit() async throws {
+        var responses = 0
+        StubURLProtocol.respond = { _ in
+            responses += 1
+
+            return responses == 1 ? .init(statusCode: 403, body: "") : .init(body: Self.releaseJSON)
+        }
+
+        let release = try await makeClient().fetchLatestRelease(usingToken: "secret")
+
+        #expect(release?.version == "1.3.0")
+        #expect(StubURLProtocol.receivedRequests.count == 2)
+        #expect(StubURLProtocol.receivedRequests[1].value(forHTTPHeaderField: "Authorization") == "Bearer secret")
+    }
+
+    @Test
+    func givesUpOnTheAnonymousLimitWhenThereIsNoTokenToFallBackOn() async {
+        StubURLProtocol.respond = { _ in .init(statusCode: 403, body: "") }
+
+        await #expect(throws: (any Error).self) {
+            try await makeClient().fetchLatestRelease(usingToken: nil)
+        }
+
+        #expect(StubURLProtocol.receivedRequests.count == 1)
+    }
+
+    private static let releaseJSON = """
+    {
+      "tag_name": "v1.3.0",
+      "html_url": "https://github.com/Jean-PierreGassin/github-desktop-notifications/releases/tag/v1.3.0",
+      "published_at": "2026-07-25T04:00:00Z",
+      "draft": false,
+      "prerelease": false,
+      "assets": [
+        { "name": "GitHubNotifications-1.3.0.dmg", "browser_download_url": "https://example.invalid/app.dmg" },
+        { "name": "GitHubNotifications-1.3.0.zip", "browser_download_url":
+          "https://example.invalid/GitHubNotifications-1.3.0.zip" }
+      ]
+    }
+    """
+
     private func makeClient() -> GitHubClient {
         GitHubClient(session: StubURLProtocol.makeSession())
     }
