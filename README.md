@@ -9,24 +9,27 @@
   <a href="#licence"><img src="https://img.shields.io/badge/Licence-Source--available-yellow.svg?style=for-the-badge" alt="Source-available licence" /></a>
 </p>
 
-**GitHub Notifications** raises a real desktop notification the moment someone requests your review, mentions you, or
-assigns you something. Private and organisation repositories included. GitHub's web inbox never does.
+**GitHub's notifications are a bell that never rings.** This one rings: a real macOS notification the moment someone
+requests your review, mentions you, or assigns you something, in private and organisation repositories too.
 
 ## Why this exists
 
-GitHub will not interrupt you. The one inbox that gates other people's work is the only thing on your machine you have
-to remember to go and check. Every way round that gives something up:
+GitHub built an inbox with a number on it and then made you go and look at the number. Everything else on your machine
+can interrupt you. The one queue that decides whether other people can get on with their work cannot.
 
-- **The web inbox:** raises nothing at all. You find out about a review request by deciding to look for one.
-- **Email:** everything lands in the same pile, with no distinction between a review request and a CI run, and it stops
-  being a signal by the second week.
-- **GitHub Mobile:** the only official push GitHub ships. It requires picking up your phone, which is the opposite of
-  what you want while sitting at the machine you would do the work on.
-- **Browser extensions and Electron wrappers:** a tab that has to stay open, or a hundred megabytes of Chromium to
-  render a list of forty rows.
+The workarounds are all worse:
 
-So this is the native one: Swift and Apple frameworks, no dependencies, no backend, no account, no telemetry. It sits in
-the menu bar, costs effectively nothing while your inbox is quiet, and interrupts you exactly as much as you tell it to.
+- **The web inbox** tells you nothing until you open the tab, which you only do once you already suspect you have
+  missed something.
+- **Email** flattens a review request and a passing CI run into the same grey line, and you filter the whole lot into a
+  folder by the second week.
+- **GitHub Mobile** is the only official push there is, and it goes to your phone. You are already at the machine you
+  would do the work on.
+- **Browser extensions and Electron apps** either want a tab left open forever or ship an entire browser engine to draw
+  a list of forty rows.
+
+So: a native menu bar app. Swift and Apple frameworks, no dependencies, no backend, no account, no telemetry. It costs
+nothing while your inbox is quiet, and it speaks up when it is not.
 
 <!-- Screenshots: drop panel.png and settings.png into assets/ and uncomment.
 | Inbox | Settings |
@@ -37,17 +40,17 @@ the menu bar, costs effectively nothing while your inbox is quiet, and interrupt
 
 ## Key features
 
-- **Real desktop notifications:** delivered by macOS, in Notification Centre, with your sounds and your Focus rules.
-- **Grouped by repository, ordered by urgency:** review requests and mentions sort above CI noise, never by timestamp.
-- **Fifteen notification types, individually switchable:** take a preset, or decide exactly which reasons are allowed to
-  interrupt you.
-- **Work hours:** hold notifications outside your hours and deliver them together when the next working day starts,
-  with per-day schedules if your week is not uniform.
-- **Customisable banners:** decide what each one shows, whether it stacks by repository, and which sound plays.
-- **Links that land:** mark read or dismiss from the panel, or click through to exactly the right page. A pull request
-  opens at the pull request, a comment opens at the comment.
-- **Private and organisation repositories:** SAML single sign-on supported, with no administrator involved.
-- **Nothing between you and GitHub:** one host, `api.github.com`. No backend, no account, no telemetry.
+- **Real desktop notifications**, delivered by macOS, so Notification Centre, your sounds and your Focus rules all
+  apply.
+- **Grouped by repository and ordered by urgency**, so review requests and mentions sit above CI noise rather than
+  above whatever happened last.
+- **Fifteen notification types you can switch individually**, or a preset if you would rather not.
+- **Work hours**, holding notifications outside your hours and delivering them together when your next working day
+  starts. Per-day schedules if your week is not uniform.
+- **Banners you can change**: what each one shows, whether it stacks by repository, and which sound plays.
+- **You decide what a click does**: mark it read and keep it in view, dismiss it, or both.
+- **Links that open the right page**: a pull request opens at the pull request, a comment opens at the comment.
+- **Private and organisation repositories**, including SAML single sign-on, with no administrator involved.
 
 ## Install
 
@@ -89,25 +92,27 @@ your 5,000 requests per hour.
 
 ## Security
 
-The app talks to one host: `api.github.com`. There is no backend, no telemetry, and no account to create.
+The app talks to two hosts, both GitHub's. `api.github.com` handles everything it reads or changes.
+`avatars.githubusercontent.com` serves the owner avatars in the panel; those requests carry no token, and each avatar
+is cached on your machine after the first fetch. There is no backend, no telemetry, and no account to create.
 
-| | |
-| --- | --- |
-| **Your token** | Stored in the macOS keychain. Never written anywhere else, never logged |
-| **Where it goes** | `api.github.com` only, over HTTPS, as a bearer token |
-| **What it can do** | Read your notification inbox, mark threads read or done, read your username |
-| **What it cannot do** | Anything you do not grant. Revoke it on GitHub at any time and the app stops working immediately |
-| **Dependencies** | None. Swift and Apple frameworks only |
+| What | Where it stands |
+| :-- | :-- |
+| **Your token** | Kept in the macOS keychain. Never written anywhere else, never logged. |
+| **Where it goes** | `api.github.com` over HTTPS, as a bearer token. Avatar requests carry no token. |
+| **What it can do** | Read your inbox, mark threads read or done, and read your username. |
+| **What it cannot do** | Anything you have not granted. Revoke it on GitHub and the app stops working at once. |
+| **Dependencies** | None. Swift and Apple frameworks only. |
 
-GitHub requires a **classic** personal access token here: the notification endpoints are not available to GitHub Apps,
-and fine-grained tokens have no notifications permission at all. Fine-grained tokens also need organisation approval,
-which classic tokens do not: you authorise your own token for a SAML organisation yourself, without an administrator.
+GitHub requires a **classic** personal access token. The notification endpoints are not open to GitHub Apps, and
+fine-grained tokens have no notifications permission at all. Fine-grained tokens also need organisation approval, where
+a classic token you authorise for a SAML organisation yourself.
 
-| Scope | Why |
-| --- | --- |
-| `notifications` | Read your inbox and mark threads as read |
-| `repo` | See notifications from private and organisation repositories |
-| `read:user` | Show which account you are signed in as |
+| Scope | Why it is needed |
+| :-- | :-- |
+| `notifications` | Read your inbox, and mark threads read or done. |
+| `repo` | See notifications from private and organisation repositories. |
+| `read:user` | Show which account you are signed in as. |
 
 Use `public_repo` instead of `repo` if you only care about public repositories.
 
@@ -124,8 +129,8 @@ open "build/Build/Products/Release/GitHub Notifications.app"
 
 Run the test suite with `./scripts/test.sh`.
 
-A clone builds without any certificate, ad-hoc signed, and the build warns when it does. That costs you a keychain
-prompt on every rebuild, which the next section explains how to stop.
+A clone builds without a certificate, ad-hoc signed, and warns that it has. That costs a keychain prompt on every
+rebuild; the next section explains how to stop it.
 
 <details>
 <summary><b>Signing, and why a self-signed certificate is enough</b></summary>
@@ -133,11 +138,10 @@ prompt on every rebuild, which the next section explains how to stop.
 The signature is not for Gatekeeper. A self-signed certificate does nothing for notarisation, and the quarantine step
 above still applies. It is for the keychain.
 
-When the app first reads your token, macOS records an access control list entry naming the program allowed to read it.
-The program is identified by its **designated requirement**, not its path. An ad-hoc signature's designated requirement
-is a hash of the built code, so it changes on every single build, and macOS treats the next build as a different
-program: **Always Allow** is forgotten, and you are asked again. That is merely annoying while developing, and it would
-be much worse once the app updates itself, since every update would prompt every user.
+When the app first reads your token, macOS records which program is allowed to read it, identified by its **designated
+requirement** rather than its path. An ad-hoc signature's requirement is a hash of the built code, so it changes with
+every build: macOS sees a different program, forgets **Always Allow**, and asks again. Annoying while developing, and
+worse once the app updates itself, since every update would prompt every user.
 
 A certificate replaces that hash with a stable requirement naming the certificate, which survives rebuilds. Apple's
 [TN2206](https://developer.apple.com/library/archive/technotes/tn2206/_index.html) is explicit that the keychain cares
@@ -157,9 +161,8 @@ release** rather than publishing a build that is unsigned or signed by anything 
 
 **Rotating the key.** The Actions secret is the only copy of the private key. If it is lost or exposed, delete
 `GitHub Notifications Signing` from Keychain Access, run `./scripts/create-signing-certificate.sh` again, and replace
-both repository secrets with the values it prints. The consequence is unavoidable: the designated requirement changes,
-so every installed copy re-asks for keychain access once, and macOS treats the app as new for notification and
-open-at-login permission. It is the same one-off cost as the move from ad-hoc signing.
+both repository secrets with what it prints. The designated requirement changes when you do, so every installed copy
+asks for keychain access once more, and macOS treats the app as new for notification and open-at-login permission.
 
 </details>
 
