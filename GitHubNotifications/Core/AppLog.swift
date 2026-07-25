@@ -33,9 +33,10 @@ final class AppLog {
         logger = Logger(subsystem: subsystem, category: "app")
     }
 
+    /// Debug lines go to the unified log only. They repeat every poll, so
+    /// keeping them out of the ring stops them crowding out anything useful.
     func debug(_ message: String) {
         logger.debug("\(message, privacy: .public)")
-        record(level: .debug, message: message)
     }
 
     func info(_ message: String) {

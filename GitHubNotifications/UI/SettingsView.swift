@@ -4,117 +4,107 @@ struct SettingsView: View {
     let session: AppSession
 
     var body: some View {
+        VStack(spacing: 0) {
+            if session.notifier.needsPermission {
+                WarningBanner(
+                    message: session.notifier.permissionMessage,
+                    actionTitle: session.notifier.permissionActionTitle,
+                    action: { Task { await session.notifier.resolvePermission() } },
+                    symbolName: "bell.slash.fill",
+                )
+                .padding([.horizontal, .top], 16)
+            }
+
+            tabs
+        }
+        .frame(width: 900, height: 700)
+        .task { await session.notifier.refreshAuthorizationStatus() }
+        .onDisappear { SettingsWindowPresenter.returnToMenuBarOnly() }
+    }
+
+    private var tabs: some View {
         TabView {
-            alertsTab
+            NotificationSettingsView(session: session)
                 .tabItem { Label("Notifications", systemImage: "bell") }
 
-            behaviourTab
-                .tabItem { Label("Behaviour", systemImage: "gearshape") }
+            BehaviourSettingsView(session: session)
+                .tabItem { Label("General", systemImage: "gearshape") }
 
             LogsView(log: session.log)
-                .tabItem { Label("Logs", systemImage: "doc.plaintext") }
-        }
-        .frame(width: 460, height: 420)
-    }
-
-    private var alertsTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Everything shows in the menu bar panel. These switches decide what also raises a macOS alert.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ForEach(NotificationGroup.allCases, id: \.self) { group in
-                    groupSection(for: group)
-                }
-            }
-            .padding(16)
+                .tabItem { Label("Activity", systemImage: "doc.plaintext") }
         }
     }
+}
 
-    private func groupSection(for group: NotificationGroup) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle(isOn: groupBinding(for: group)) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(group.displayName)
-                        .fontWeight(.medium)
+struct BehaviourSettingsView: View {
+    let session: AppSession
 
-                    Text(group.summary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.switch)
-
-            DisclosureGroup("Individual types") {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(session.alertPreferences.reasons(in: group), id: \.self) { reason in
-                        Toggle(reason.displayName, isOn: reasonBinding(for: reason))
-                            .toggleStyle(.checkbox)
-                    }
-                }
-                .padding(.top, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .font(.caption)
-            .padding(.leading, 4)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var behaviourTab: some View {
+    var body: some View {
         Form {
             Section {
-                Toggle("Launch at login", isOn: launchAtLoginBinding)
+                Toggle("Open at login", isOn: launchAtLoginBinding)
 
-                Stepper(
-                    "Show up to \(session.rowsPerRepository) notifications per repository",
-                    value: rowsPerRepositoryBinding,
-                    in: 1 ... 20,
-                )
+                Toggle("Mark a notification as read when I open it", isOn: marksAsReadBinding)
+
+                LabeledContent("Notifications shown per repository") {
+                    HStack(spacing: 6) {
+                        TextField("", value: rowsPerRepositoryBinding, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 52)
+                            .multilineTextAlignment(.center)
+
+                        Stepper("", value: rowsPerRepositoryBinding, in: 1 ... 20)
+                            .labelsHidden()
+                    }
+                }
+            } header: {
+                Text("Menu bar")
+            } footer: {
+                Text("Anything beyond the limit is summarised, with a link to your inbox on github.com.")
+                    .foregroundStyle(.secondary)
             }
 
             Section {
-                LabeledContent("Signed in as") {
-                    Text(signedInDescription)
+                LabeledContent("Account") {
+                    Text(accountDescription)
                         .foregroundStyle(.secondary)
                 }
 
                 LabeledContent("Checks GitHub every") {
-                    Text("\(Int(session.poller.pollInterval))s")
+                    Text("\(Int(session.poller.pollInterval)) seconds")
                         .foregroundStyle(.secondary)
                 }
+
+                if session.auth.isSignedIn {
+                    LabeledContent("Session") {
+                        Button("Sign out", action: session.signOut)
+                            .appButton(.destructive, size: .small)
+                    }
+                }
+            } header: {
+                Text("Connection")
             } footer: {
-                Text("GitHub sets the polling interval. The app never checks more often than it asks for.")
-                    .font(.caption)
+                Text("GitHub sets this interval and the app never asks more often. "
+                    + "Unchanged inboxes cost nothing against your rate limit.")
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .font(.callout)
     }
 
-    private var signedInDescription: String {
+    private var accountDescription: String {
         guard case let .signedIn(user) = session.auth.state else {
-            return "Not signed in"
+            return "Not connected"
         }
 
         return user.account.login
     }
 
-    private func groupBinding(for group: NotificationGroup) -> Binding<Bool> {
+    private var marksAsReadBinding: Binding<Bool> {
         Binding(
-            get: { session.alertPreferences.isFullyEnabled(group) },
-            set: { session.alertPreferences.setEnabled($0, forGroup: group) },
-        )
-    }
-
-    private func reasonBinding(for reason: NotificationReason) -> Binding<Bool> {
-        Binding(
-            get: { session.alertPreferences.isEnabled(reason) },
-            set: { session.alertPreferences.setEnabled($0, for: reason) },
+            get: { session.behaviourPreferences.marksAsReadOnOpen },
+            set: { session.behaviourPreferences.marksAsReadOnOpen = $0 },
         )
     }
 
@@ -128,7 +118,7 @@ struct SettingsView: View {
     private var rowsPerRepositoryBinding: Binding<Int> {
         Binding(
             get: { session.rowsPerRepository },
-            set: { session.rowsPerRepository = $0 },
+            set: { session.rowsPerRepository = min(max($0, 1), 20) },
         )
     }
 }

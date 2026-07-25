@@ -13,14 +13,22 @@ final class AppSession {
     let poller: Poller
     let notifier: Notifier
     let alertPreferences: AlertPreferences
+    let notificationContentPreferences: NotificationContentPreferences
+    let workHoursPreferences: WorkHoursPreferences
+    let behaviourPreferences: BehaviourPreferences
+    let heldAlerts: HeldAlertQueue
     let launchAtLogin: LaunchAtLogin
 
     private static let rowsPerRepositoryKey = "rowsPerRepository"
     private static let defaultRowsPerRepository = 5
 
+    private static let heldAlertCheckInterval: Duration = .seconds(30)
+
     private let api: GitHubAPI
     private let ledger: SeenThreadLedger
     private let defaults: UserDefaults
+
+    private var heldAlertLoop: Task<Void, Never>?
 
     init(
         log: AppLog = AppLog.shared,
@@ -40,6 +48,10 @@ final class AppSession {
         )
         notifier = Notifier(log: log)
         alertPreferences = AlertPreferences(defaults: defaults)
+        notificationContentPreferences = NotificationContentPreferences(defaults: defaults)
+        workHoursPreferences = WorkHoursPreferences(defaults: defaults)
+        behaviourPreferences = BehaviourPreferences(defaults: defaults)
+        heldAlerts = HeldAlertQueue(log: log)
         launchAtLogin = LaunchAtLogin(log: log)
         ledger = SeenThreadLedger(log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
@@ -75,6 +87,40 @@ final class AppSession {
         if auth.isSignedIn {
             poller.start()
         }
+
+        startHeldAlertLoop()
+    }
+
+    /// Held alerts are released on their own schedule, independent of polling,
+    /// so a quiet inbox still delivers what was saved up.
+    private func startHeldAlertLoop() {
+        guard heldAlertLoop == nil else {
+            return
+        }
+
+        heldAlertLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.releaseHeldAlertsIfDue()
+                try? await Task.sleep(for: Self.heldAlertCheckInterval)
+            }
+        }
+    }
+
+    private func releaseHeldAlertsIfDue() async {
+        guard !heldAlerts.isEmpty else {
+            return
+        }
+
+        let hours = workHoursPreferences.hours
+
+        guard !hours.isEnabled || hours.isHeldDeliveryDue(at: Date()) else {
+            return
+        }
+
+        let released = heldAlerts.drain()
+        log.info("Delivering \(released.count) notifications held outside your hours.")
+
+        await post(released)
     }
 
     private func connectAlerts() {
@@ -97,12 +143,22 @@ final class AppSession {
             return
         }
 
+        let hours = workHoursPreferences.hours
+
+        guard !hours.isEnabled || hours.isWithinHours(Date()) else {
+            heldAlerts.hold(alertableThreads)
+            log.info("Holding \(alertableThreads.count) notifications until your hours start.")
+            return
+        }
+
         log.info("Announcing \(alertableThreads.count) new notifications.")
 
-        Task {
-            for thread in NotificationGrouping.sortByPriorityThenRecency(alertableThreads) {
-                await notifier.announce(thread)
-            }
+        Task { await post(alertableThreads) }
+    }
+
+    private func post(_ threads: [NotificationThread]) async {
+        for thread in NotificationGrouping.sortByPriorityThenRecency(threads) {
+            await notifier.announce(thread, settings: notificationContentPreferences.settings)
         }
     }
 
@@ -129,13 +185,42 @@ final class AppSession {
         poller.reset()
         store.removeAll()
         ledger.clear()
+        heldAlerts.clear()
         auth.signOut()
     }
 
     func open(_ thread: NotificationThread) {
+        askAboutMarkingAsReadIfNeeded()
+
         NSWorkspace.shared.open(ThreadURL.derive(for: thread))
 
+        guard behaviourPreferences.marksAsReadOnOpen else {
+            return
+        }
+
         Task { await markAsRead(thread) }
+    }
+
+    /// Asked once, the first time a notification is opened, because silently
+    /// clearing someone's inbox is a surprise if they use it as a to-do list.
+    private func askAboutMarkingAsReadIfNeeded() {
+        guard !behaviourPreferences.hasChosenMarkAsReadBehaviour else {
+            return
+        }
+
+        behaviourPreferences.hasChosenMarkAsReadBehaviour = true
+
+        let prompt = NSAlert()
+        prompt.messageText = "Mark notifications as read when you open them?"
+        prompt.informativeText = "Opening a notification usually means you have dealt with it, so it can be cleared "
+            + "from your inbox automatically. You can change this later in Settings."
+        prompt.addButton(withTitle: "Yes")
+        prompt.addButton(withTitle: "No, I will mark them myself")
+
+        NSApplication.shared.activate(ignoringOtherApps: true)
+
+        behaviourPreferences.marksAsReadOnOpen = prompt.runModal() == .alertFirstButtonReturn
+        log.info("Marking as read on open is \(behaviourPreferences.marksAsReadOnOpen ? "on" : "off").")
     }
 
     func openInbox() {
@@ -171,7 +256,7 @@ final class AppSession {
         }
     }
 
-    private func markAsRead(_ thread: NotificationThread) async {
+    func markAsRead(_ thread: NotificationThread) async {
         guard let token = auth.activeToken else {
             return
         }

@@ -67,22 +67,44 @@ enum NotificationReason: String, Sendable, CaseIterable, Codable {
 
     var displayName: String {
         switch self {
-        case .reviewRequested: "Review requested"
-        case .approvalRequested: "Approval requested"
+        case .reviewRequested: "Review requested from you"
+        case .approvalRequested: "Your approval needed to run"
         case .assigned: "Assigned to you"
         case .mentioned: "You were mentioned"
         case .teamMentioned: "Your team was mentioned"
-        case .invitation: "Invitation"
+        case .invitation: "You were invited"
         case .securityAlert: "Security alert"
-        case .securityAdvisoryCredit: "Security credit"
-        case .author: "Activity on your thread"
-        case .comment: "New comment"
-        case .manual: "Manually subscribed"
-        case .subscribed: "Watching this repo"
-        case .stateChange: "Status changed"
-        case .ciActivity: "Workflow run"
-        case .memberFeatureRequested: "Feature request"
+        case .securityAdvisoryCredit: "Credited on an advisory"
+        case .author: "Reply on something you opened"
+        case .comment: "New comment on a thread"
+        case .manual: "Thread you subscribed to"
+        case .subscribed: "Repository you watch"
+        case .stateChange: "Closed, merged or reopened"
+        case .ciActivity: "Workflow run finished"
+        case .memberFeatureRequested: "Organisation feature request"
         case .unrecognised: "Other activity"
+        }
+    }
+
+    /// The longer form used where there is room to explain, such as settings.
+    var explanation: String {
+        switch self {
+        case .reviewRequested: "Someone asked you to review a pull request."
+        case .approvalRequested: "A workflow run is waiting on your approval."
+        case .assigned: "You were assigned to an issue or pull request."
+        case .mentioned: "Someone wrote your @username."
+        case .teamMentioned: "Someone mentioned a team you belong to."
+        case .invitation: "You were invited to a repository or organisation."
+        case .securityAlert: "A vulnerability was found in a repository you can see."
+        case .securityAdvisoryCredit: "You were credited on a security advisory."
+        case .author: "Activity on an issue, pull request or discussion you opened."
+        case .comment: "A new comment on a thread you are part of."
+        case .manual: "A thread you subscribed to by hand."
+        case .subscribed: "Activity in a repository you watch."
+        case .stateChange: "An issue or pull request was closed, merged or reopened."
+        case .ciActivity: "A GitHub Actions workflow you triggered finished."
+        case .memberFeatureRequested: "Someone in your organisation requested a feature."
+        case .unrecognised: "A notification type this app does not recognise yet."
         }
     }
 

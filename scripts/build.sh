@@ -15,4 +15,4 @@ shift || true
 
 run_xcodebuild -configuration "${CONFIGURATION}" "$@" build
 
-echo "Built ${DERIVED_DATA}/Build/Products/${CONFIGURATION}/GitHubNotifications.app"
+echo "Built ${DERIVED_DATA}/Build/Products/${CONFIGURATION}/GitHub Notifications.app"

@@ -6,9 +6,10 @@ import Testing
 @MainActor
 struct AlertPreferencesTests {
     @Test
-    func alertsOnHighPriorityReasonsOutOfTheBox() {
+    func onlyInterruptsForHighPriorityOutOfTheBox() {
         let preferences = makePreferences()
 
+        #expect(preferences.preset == .essential)
         #expect(preferences.allowsAlert(for: .reviewRequested))
         #expect(preferences.allowsAlert(for: .mentioned))
     }
@@ -19,51 +20,81 @@ struct AlertPreferencesTests {
     }
 
     @Test
-    func togglingAGroupTogglesEveryReasonInIt() {
+    func theEverythingPresetCoversEveryType() {
         let preferences = makePreferences()
 
-        preferences.setEnabled(true, forGroup: .systemEvents)
+        preferences.select(.everything)
 
-        #expect(preferences.allowsAlert(for: .ciActivity))
-        #expect(preferences.isFullyEnabled(.systemEvents))
+        #expect(NotificationReason.togglableCases.allSatisfy(preferences.allowsAlert))
     }
 
     @Test
-    func reportsAGroupAsPartiallyEnabledWhenOnlySomeReasonsAreOn() {
+    func theExceptSystemEventsPresetLeavesWorkflowRunsOut() {
         let preferences = makePreferences()
 
-        preferences.setEnabled(true, for: .ciActivity)
+        preferences.select(.exceptSystemEvents)
 
-        #expect(preferences.isPartiallyEnabled(.systemEvents))
-        #expect(!preferences.isFullyEnabled(.systemEvents))
+        #expect(preferences.allowsAlert(for: .subscribed))
+        #expect(!preferences.allowsAlert(for: .ciActivity))
     }
 
     @Test
-    func turningAReasonOffLeavesTheRestOfItsGroupAlone() {
+    func pickingATypeByHandMovesTheUserOntoTheirOwnSetWithoutLosingTheRest() {
         let preferences = makePreferences()
 
         preferences.setEnabled(false, for: .mentioned)
 
+        #expect(preferences.preset == .custom)
         #expect(!preferences.allowsAlert(for: .mentioned))
         #expect(preferences.allowsAlert(for: .reviewRequested))
     }
 
     @Test
-    func remembersChoicesAcrossLaunches() {
+    func addingATypeToAPresetKeepsEverythingThatPresetAlreadyCovered() {
+        let preferences = makePreferences()
+
+        preferences.setEnabled(true, for: .ciActivity)
+
+        #expect(preferences.allowsAlert(for: .ciActivity))
+        #expect(preferences.allowsAlert(for: .reviewRequested))
+    }
+
+    @Test
+    func snapsBackToAPresetWhenTheChosenTypesMatchItExactly() {
+        let preferences = makePreferences()
+        preferences.select(.everything)
+
+        for reason in preferences.reasons(in: .systemEvents) {
+            preferences.setEnabled(false, for: reason)
+        }
+
+        #expect(preferences.preset == .exceptSystemEvents)
+    }
+
+    @Test
+    func remembersACustomSetAcrossLaunches() {
         let defaults = makeDefaults()
         let firstLaunch = AlertPreferences(defaults: defaults)
-        firstLaunch.setEnabled(false, forGroup: .highPriority)
+        firstLaunch.setEnabled(false, for: .reviewRequested)
 
         let secondLaunch = AlertPreferences(defaults: defaults)
 
+        #expect(secondLaunch.preset == .custom)
         #expect(!secondLaunch.allowsAlert(for: .reviewRequested))
+        #expect(secondLaunch.allowsAlert(for: .mentioned))
+    }
+
+    @Test
+    func remembersAChosenPresetAcrossLaunches() {
+        let defaults = makeDefaults()
+        AlertPreferences(defaults: defaults).select(.everything)
+
+        #expect(AlertPreferences(defaults: defaults).preset == .everything)
     }
 
     @Test
     func neverOffersTheUnrecognisedReasonAsAToggle() {
-        let preferences = makePreferences()
-
-        #expect(!preferences.reasons(in: .low).contains(.unrecognised))
+        #expect(!makePreferences().reasons(in: .low).contains(.unrecognised))
     }
 
     private func makePreferences() -> AlertPreferences {

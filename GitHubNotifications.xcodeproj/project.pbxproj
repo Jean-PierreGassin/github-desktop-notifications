@@ -20,7 +20,7 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFileReference section */
-		1A0000000000000000000004 /* GitHubNotifications.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GitHubNotifications.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A0000000000000000000004 /* GitHub Notifications.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "GitHub Notifications.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A0000000000000000000005 /* GitHubNotificationsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GitHubNotificationsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -54,7 +54,7 @@
 		1A0000000000000000000007 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1A0000000000000000000004 /* GitHubNotifications.app */,
+				1A0000000000000000000004 /* GitHub Notifications.app */,
 				1A0000000000000000000005 /* GitHubNotificationsTests.xctest */,
 			);
 			name = Products;
@@ -80,7 +80,7 @@
 			);
 			name = GitHubNotifications;
 			productName = GitHubNotifications;
-			productReference = 1A0000000000000000000004 /* GitHubNotifications.app */;
+			productReference = 1A0000000000000000000004 /* GitHub Notifications.app */;
 			productType = "com.apple.product-type.application";
 		};
 		1A0000000000000000000003 /* GitHubNotificationsTests */ = {
@@ -261,7 +261,8 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Jean-Pierre Gassin. MIT licensed.";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jpgassin.GitHubNotifications;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = GitHubNotifications;
+				PRODUCT_NAME = "GitHub Notifications";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -283,7 +284,8 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Jean-Pierre Gassin. MIT licensed.";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jpgassin.GitHubNotifications;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = GitHubNotifications;
+				PRODUCT_NAME = "GitHub Notifications";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -303,7 +305,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GitHubNotifications.app/Contents/MacOS/GitHubNotifications";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GitHub Notifications.app/Contents/MacOS/GitHub Notifications";
 			};
 			name = Debug;
 		};
@@ -321,7 +323,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GitHubNotifications.app/Contents/MacOS/GitHubNotifications";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GitHub Notifications.app/Contents/MacOS/GitHub Notifications";
 			};
 			name = Release;
 		};

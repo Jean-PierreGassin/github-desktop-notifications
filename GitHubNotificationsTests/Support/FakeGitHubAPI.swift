@@ -35,6 +35,8 @@ final class FakeGitHubAPI: GitHubAPI, @unchecked Sendable {
 final class InMemoryTokenStorage: TokenStorage, @unchecked Sendable {
     private var token: String?
 
+    private(set) var wasLastReadRefused = false
+
     init(token: String? = nil) {
         self.token = token
     }

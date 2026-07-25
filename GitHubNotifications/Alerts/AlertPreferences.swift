@@ -1,21 +1,74 @@
 import Foundation
 
+/// The ready-made choices offered in Settings. Anything the user assembles
+/// themselves is kept as ``custom`` and remembered.
+enum AlertPreset: String, Sendable, CaseIterable, Codable {
+    case essential
+    case exceptSystemEvents
+    case everything
+    case custom
+
+    var displayName: String {
+        switch self {
+        case .essential: "Only what needs you"
+        case .exceptSystemEvents: "Everything except CI and system events"
+        case .everything: "Everything"
+        case .custom: "Custom"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .essential: "Reviews, mentions, assignments, security and invitations."
+        case .exceptSystemEvents: "All activity on threads you follow, without workflow runs."
+        case .everything: "Every notification that reaches your inbox."
+        case .custom: "The types you picked below."
+        }
+    }
+
+    /// The reasons this preset alerts on, or `nil` when the user is choosing
+    /// them individually.
+    var reasons: Set<NotificationReason>? {
+        switch self {
+        case .essential:
+            Set(NotificationReason.togglableCases.filter { $0.group == .highPriority })
+        case .exceptSystemEvents:
+            Set(NotificationReason.togglableCases.filter { $0.group != .systemEvents })
+        case .everything:
+            Set(NotificationReason.togglableCases)
+        case .custom:
+            nil
+        }
+    }
+}
+
 /// Which notification types are allowed to interrupt the user.
 ///
 /// Everything still shows in the panel; this only decides what raises a macOS
-/// alert. High priority is on by default, CI and system events are off.
+/// alert.
 @MainActor
 @Observable
 final class AlertPreferences {
-    private static let storageKey = "enabledAlertReasons"
+    private static let presetKey = "alertPreset"
+    private static let customReasonsKey = "customAlertReasons"
 
     private let defaults: UserDefaults
 
-    private(set) var enabledReasons: Set<NotificationReason>
+    private var customReasons: Set<NotificationReason>
+
+    private(set) var preset: AlertPreset
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        enabledReasons = Self.loadEnabledReasons(from: defaults)
+
+        preset = defaults.string(forKey: Self.presetKey).flatMap(AlertPreset.init(rawValue:)) ?? .essential
+        customReasons = Set(
+            (defaults.stringArray(forKey: Self.customReasonsKey) ?? []).compactMap(NotificationReason.init(rawValue:)),
+        )
+    }
+
+    var enabledReasons: Set<NotificationReason> {
+        preset.reasons ?? customReasons
     }
 
     func allowsAlert(for reason: NotificationReason) -> Bool {
@@ -26,51 +79,39 @@ final class AlertPreferences {
         enabledReasons.contains(reason)
     }
 
+    func select(_ newPreset: AlertPreset) {
+        preset = newPreset
+        save()
+    }
+
+    /// Picking types by hand always lands the user on their own custom set,
+    /// starting from whatever the current preset already alerts on.
     func setEnabled(_ isEnabled: Bool, for reason: NotificationReason) {
+        var reasons = enabledReasons
+
         if isEnabled {
-            enabledReasons.insert(reason)
+            reasons.insert(reason)
         } else {
-            enabledReasons.remove(reason)
+            reasons.remove(reason)
         }
 
+        customReasons = reasons
+        preset = matchingPreset(for: reasons) ?? .custom
         save()
-    }
-
-    func setEnabled(_ isEnabled: Bool, forGroup group: NotificationGroup) {
-        for reason in reasons(in: group) {
-            if isEnabled {
-                enabledReasons.insert(reason)
-            } else {
-                enabledReasons.remove(reason)
-            }
-        }
-
-        save()
-    }
-
-    func isFullyEnabled(_ group: NotificationGroup) -> Bool {
-        reasons(in: group).allSatisfy(enabledReasons.contains)
-    }
-
-    func isPartiallyEnabled(_ group: NotificationGroup) -> Bool {
-        let groupReasons = reasons(in: group)
-
-        return groupReasons.contains(where: enabledReasons.contains) && !groupReasons.allSatisfy(enabledReasons.contains)
     }
 
     func reasons(in group: NotificationGroup) -> [NotificationReason] {
         NotificationReason.togglableCases.filter { $0.group == group }
     }
 
-    private func save() {
-        defaults.set(enabledReasons.map(\.rawValue), forKey: Self.storageKey)
+    /// Keeps the selection honest: hand-picking exactly what a preset covers
+    /// shows that preset rather than "Custom".
+    private func matchingPreset(for reasons: Set<NotificationReason>) -> AlertPreset? {
+        AlertPreset.allCases.first { $0.reasons == reasons }
     }
 
-    private static func loadEnabledReasons(from defaults: UserDefaults) -> Set<NotificationReason> {
-        guard let storedReasons = defaults.stringArray(forKey: storageKey) else {
-            return Set(NotificationReason.togglableCases.filter { $0.group.alertsByDefault })
-        }
-
-        return Set(storedReasons.compactMap(NotificationReason.init(rawValue:)))
+    private func save() {
+        defaults.set(preset.rawValue, forKey: Self.presetKey)
+        defaults.set(customReasons.map(\.rawValue), forKey: Self.customReasonsKey)
     }
 }

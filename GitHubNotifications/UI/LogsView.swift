@@ -13,11 +13,11 @@ struct LogsView: View {
                     ForEach(log.entries.reversed()) { entry in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(entry.timestamp, format: .dateTime.hour().minute().second())
-                                .font(.system(.caption2, design: .monospaced))
+                                .font(.system(.caption, design: .monospaced))
                                 .foregroundStyle(.tertiary)
 
                             Text(entry.message)
-                                .font(.caption)
+                                .font(.callout)
                                 .foregroundStyle(colour(for: entry.level))
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)

@@ -52,7 +52,13 @@ final class AuthService {
 
     func restoreSession() async {
         guard let storedToken = storage.readToken() else {
-            log.info("No stored token; waiting for sign in.")
+            guard storage.wasLastReadRefused else {
+                log.info("No stored token; waiting for sign in.")
+                return
+            }
+
+            state = .failed(.tokenStorageFailure(description: "macOS refused access to the saved token"))
+            log.error("macOS refused access to the saved token; sign in again to store a new one.")
             return
         }
 
@@ -110,7 +116,7 @@ final class AuthService {
         } catch let error as GitHubError {
             recordFailure(error)
         } catch let error as KeychainError {
-            recordFailure(.transportFailure(description: "couldn't save to keychain (\(error.localizedDescription))"))
+            recordFailure(.tokenStorageFailure(description: error.localizedDescription))
         } catch {
             recordFailure(.transportFailure(description: error.localizedDescription))
         }

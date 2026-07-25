@@ -19,7 +19,7 @@ enum NotificationSubjectType: String, Sendable, Codable {
     }
 }
 
-struct NotificationSubject: Sendable, Equatable, Decodable {
+struct NotificationSubject: Sendable, Equatable, Codable {
     let title: String
     let type: NotificationSubjectType
     let apiURL: URL?
@@ -33,7 +33,7 @@ struct NotificationSubject: Sendable, Equatable, Decodable {
     }
 }
 
-struct RepositoryOwner: Sendable, Equatable, Decodable {
+struct RepositoryOwner: Sendable, Equatable, Codable {
     let login: String
     let avatarURL: URL?
 
@@ -43,7 +43,7 @@ struct RepositoryOwner: Sendable, Equatable, Decodable {
     }
 }
 
-struct NotificationRepository: Sendable, Equatable, Decodable, Identifiable {
+struct NotificationRepository: Sendable, Equatable, Codable, Identifiable {
     let id: Int
     let name: String
     let fullName: String
@@ -61,7 +61,7 @@ struct NotificationRepository: Sendable, Equatable, Decodable, Identifiable {
     }
 }
 
-struct NotificationThread: Sendable, Equatable, Decodable, Identifiable {
+struct NotificationThread: Sendable, Equatable, Codable, Identifiable {
     let id: String
     let isUnread: Bool
     let reason: NotificationReason

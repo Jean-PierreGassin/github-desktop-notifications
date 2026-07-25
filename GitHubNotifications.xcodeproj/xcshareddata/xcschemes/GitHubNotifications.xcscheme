@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "1A0000000000000000000002"
-               BuildableName = "GitHubNotifications.app"
+               BuildableName = "GitHub Notifications.app"
                BlueprintName = "GitHubNotifications"
                ReferencedContainer = "container:GitHubNotifications.xcodeproj">
             </BuildableReference>
@@ -69,7 +69,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "1A0000000000000000000002"
-            BuildableName = "GitHubNotifications.app"
+            BuildableName = "GitHub Notifications.app"
             BlueprintName = "GitHubNotifications"
             ReferencedContainer = "container:GitHubNotifications.xcodeproj">
          </BuildableReference>
@@ -86,7 +86,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "1A0000000000000000000002"
-            BuildableName = "GitHubNotifications.app"
+            BuildableName = "GitHub Notifications.app"
             BlueprintName = "GitHubNotifications"
             ReferencedContainer = "container:GitHubNotifications.xcodeproj">
          </BuildableReference>

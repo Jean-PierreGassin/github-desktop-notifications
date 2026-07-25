@@ -11,6 +11,7 @@ enum GitHubError: Error, Sendable, Equatable {
     case serverFailure(statusCode: Int)
     case malformedResponse
     case transportFailure(description: String)
+    case tokenStorageFailure(description: String)
 
     var userFacingMessage: String {
         switch self {
@@ -30,6 +31,9 @@ enum GitHubError: Error, Sendable, Equatable {
             "GitHub returned something we couldn't read. We'll try again shortly."
         case let .transportFailure(description):
             "Couldn't reach GitHub: \(description)"
+        case let .tokenStorageFailure(description):
+            "Couldn't save your token to the keychain (\(description)). Choose Always Allow if macOS asks for "
+                + "permission, or delete the \"GitHub Notifications\" entry in Keychain Access and sign in again."
         }
     }
 

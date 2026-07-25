@@ -30,15 +30,28 @@ final class Notifier: NSObject, @preconcurrency UNUserNotificationCenterDelegate
     }
 
     /// Raises one alert per thread, grouped in Notification Centre by repository.
-    func announce(_ thread: NotificationThread) async {
-        let content = UNMutableNotificationContent()
-        content.title = thread.repository.fullName
-        content.subtitle = thread.reason.displayName
-        content.body = thread.subject.title
-        content.threadIdentifier = thread.repository.fullName
+    func announce(_ thread: NotificationThread, settings: NotificationContentSettings) async {
+        let content = makeContent(
+            NotificationContentFormatter.make(for: thread, settings: settings),
+            settings: settings,
+        )
+        content.threadIdentifier = settings.groupsByRepository ? thread.repository.fullName : ""
         content.userInfo = [Self.threadIdentifierKey: thread.id]
 
         await post(content, identifier: "thread-\(thread.id)-\(thread.updatedAt.timeIntervalSince1970)")
+    }
+
+    private func makeContent(
+        _ text: NotificationContentText,
+        settings: NotificationContentSettings,
+    ) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = text.title
+        content.subtitle = text.subtitle
+        content.body = text.body
+        content.sound = settings.playsSound ? settings.sound.notificationSound : nil
+
+        return content
     }
 
     nonisolated func userNotificationCenter(
@@ -67,8 +80,31 @@ final class Notifier: NSObject, @preconcurrency UNUserNotificationCenterDelegate
         authorizationStatus == .authorized || authorizationStatus == .provisional
     }
 
-    var isBlockedBySystemSettings: Bool {
-        authorizationStatus == .denied
+    var needsPermission: Bool {
+        !canPostNotifications
+    }
+
+    /// macOS only shows its own prompt once. After that the only route back is
+    /// System Settings, so the button has to say which one the user is getting.
+    var permissionActionTitle: String {
+        authorizationStatus == .notDetermined ? "Allow" : "Open Settings"
+    }
+
+    var permissionMessage: String {
+        authorizationStatus == .notDetermined
+            ? "Alerts are not turned on yet, so nothing will reach you."
+            : "macOS is blocking alerts from this app, so nothing will reach you."
+    }
+
+    /// Asks macOS directly when it has never been asked, and falls back to
+    /// System Settings once a decision has been recorded.
+    func resolvePermission() async {
+        guard authorizationStatus == .notDetermined else {
+            openSystemNotificationSettings()
+            return
+        }
+
+        await requestAuthorization()
     }
 
     func requestAuthorization() async {
@@ -104,12 +140,12 @@ final class Notifier: NSObject, @preconcurrency UNUserNotificationCenterDelegate
         NSWorkspace.shared.open(Self.notificationSettingsURL)
     }
 
-    func postTestNotification() async {
-        let content = UNMutableNotificationContent()
-        content.title = "GitHub Notifications"
-        content.body = "Notifications are working."
+    /// Sends a sample alert formatted exactly as a real one would be, so the
+    /// user can confirm both permission and layout in one click.
+    func sendTestNotification(settings: NotificationContentSettings) async {
+        let text = NotificationContentFormatter.make(for: SampleNotification.thread, settings: settings)
 
-        await post(content, identifier: UUID().uuidString)
+        await post(makeContent(text, settings: settings), identifier: "test-\(UUID().uuidString)")
     }
 
     func post(_ content: UNNotificationContent, identifier: String) async {

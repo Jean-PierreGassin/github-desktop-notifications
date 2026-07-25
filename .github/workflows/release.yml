@@ -25,7 +25,7 @@ jobs:
       - name: Package
         run: |
           ditto -c -k --keepParent \
-            build/Build/Products/Release/GitHubNotifications.app \
+            "build/Build/Products/Release/GitHub Notifications.app" \
             GitHubNotifications-${{ steps.version.outputs.number }}.zip
 
       - name: Publish release

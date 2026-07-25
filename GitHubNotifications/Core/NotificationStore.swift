@@ -4,6 +4,10 @@ import Foundation
 @MainActor
 @Observable
 final class NotificationStore {
+    /// The panel never scrolls, so the number of repositories on show is
+    /// bounded too. The rest are summarised with a link to the inbox.
+    private static let mostRepositoriesShown = 8
+
     private(set) var threads: [NotificationThread] = []
     private(set) var groups: [RepositoryGroup] = []
 
@@ -13,6 +17,14 @@ final class NotificationStore {
 
     init(rowsPerRepository: Int = 5) {
         self.rowsPerRepository = rowsPerRepository
+    }
+
+    var visibleGroups: [RepositoryGroup] {
+        Array(groups.prefix(Self.mostRepositoriesShown))
+    }
+
+    var hiddenRepositoryCount: Int {
+        max(groups.count - Self.mostRepositoriesShown, 0)
     }
 
     var unreadCount: Int {

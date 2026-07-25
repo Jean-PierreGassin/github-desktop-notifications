@@ -160,7 +160,7 @@ final class Poller {
             pausedUntil = Date().addingTimeInterval(retryAfter)
         case .offline, .transportFailure:
             pausedUntil = Date().addingTimeInterval(Self.offlineRetryDelay)
-        case .missingRequiredScopes, .serverFailure, .malformedResponse:
+        case .missingRequiredScopes, .serverFailure, .malformedResponse, .tokenStorageFailure:
             break
         }
     }

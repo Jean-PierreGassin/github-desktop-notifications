@@ -2,8 +2,7 @@ import Combine
 import SwiftUI
 
 struct InboxPanel: View {
-    private static let panelWidth: CGFloat = 340
-    private static let tallestListHeight: CGFloat = 420
+    private static let panelWidth: CGFloat = 410
 
     let session: AppSession
 
@@ -12,12 +11,12 @@ struct InboxPanel: View {
     @State private var now = Date()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             header
 
             Divider()
 
-            if session.notifier.isBlockedBySystemSettings {
+            if session.notifier.needsPermission {
                 notificationsBlockedWarning
             }
 
@@ -27,7 +26,7 @@ struct InboxPanel: View {
 
             footer
         }
-        .padding(12)
+        .padding(14)
         .frame(width: Self.panelWidth)
         .task { await session.notifier.refreshAuthorizationStatus() }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { tick in
@@ -37,8 +36,7 @@ struct InboxPanel: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            GitHubMarkView(hasUnread: false)
-                .frame(width: 16, height: 16)
+            GitHubMarkView(hasUnread: false, size: 18)
 
             Text("GitHub Notifications")
                 .font(.headline)
@@ -55,19 +53,12 @@ struct InboxPanel: View {
                 refreshButton
             }
 
-            Button {
-                openSettings()
-            } label: {
+            Button(action: openSettings) {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.plain)
             .help("Settings")
         }
-    }
-
-    private func openSettings() {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        openWindow(id: GitHubNotificationsApp.settingsWindowIdentifier)
     }
 
     private var refreshButton: some View {
@@ -84,7 +75,7 @@ struct InboxPanel: View {
 
     private var refreshHelpText: String {
         guard !session.poller.isFetching else {
-            return "Checking GitHub…"
+            return "Checking GitHub"
         }
 
         guard !session.poller.canRefreshNow else {
@@ -93,22 +84,16 @@ struct InboxPanel: View {
 
         let secondsRemaining = Int(session.poller.nextPollDueAt.timeIntervalSince(now).rounded(.up))
 
-        return "GitHub asks us to wait. Next check in \(max(secondsRemaining, 0))s."
+        return "GitHub sets the pace here. Next check in \(max(secondsRemaining, 0))s."
     }
 
     private var notificationsBlockedWarning: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("Notifications are turned off for this app.", systemImage: "bell.slash")
-                .font(.caption)
-                .foregroundStyle(.orange)
-
-            Button("Open notification settings") {
-                session.notifier.openSystemNotificationSettings()
-            }
-            .buttonStyle(.link)
-            .font(.caption)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        WarningBanner(
+            message: session.notifier.permissionMessage,
+            actionTitle: session.notifier.permissionActionTitle,
+            action: { Task { await session.notifier.resolvePermission() } },
+            symbolName: "bell.slash.fill",
+        )
     }
 
     @ViewBuilder
@@ -121,8 +106,8 @@ struct InboxPanel: View {
                 ProgressView()
                     .controlSize(.small)
 
-                Text("Checking your token with GitHub…")
-                    .font(.callout)
+                Text("Checking your token with GitHub")
+                    .font(.body)
                     .foregroundStyle(.secondary)
             }
         case let .signedIn(user):
@@ -134,10 +119,10 @@ struct InboxPanel: View {
     private func signedInContent(for user: AuthenticatedUser) -> some View {
         if !user.canSeePrivateRepositories {
             Label(
-                "Your token has no repo scope, so private and organisation notifications won't appear.",
+                "This token has no repo scope, so private and organisation notifications are hidden.",
                 systemImage: "exclamationmark.triangle",
             )
-            .font(.caption)
+            .font(.callout)
             .foregroundStyle(.orange)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -149,62 +134,72 @@ struct InboxPanel: View {
         }
     }
 
+    /// The panel grows with its contents rather than scrolling, so the list is
+    /// bounded by repository as well as by row.
     private var notificationList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(session.store.groups) { group in
-                    RepositoryGroupView(
-                        group: group,
-                        onOpenThread: session.open,
-                        onMarkThreadDone: { thread in Task { await session.markAsDone(thread) } },
-                        onOpenInbox: session.openInbox,
-                    )
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(session.store.visibleGroups) { group in
+                RepositoryGroupView(
+                    group: group,
+                    onOpenThread: session.open,
+                    onMarkThreadRead: { thread in Task { await session.markAsRead(thread) } },
+                    onDismissThread: { thread in Task { await session.markAsDone(thread) } },
+                    onOpenInbox: session.openInbox,
+                )
+            }
+
+            if session.store.hiddenRepositoryCount > 0 {
+                Button(action: session.openInbox) {
+                    Text("\(session.store.hiddenRepositoryCount) more repositories")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
                 }
+                .buttonStyle(.plain)
+                .help("Open your inbox on github.com to see the rest")
             }
         }
-        .frame(maxHeight: Self.tallestListHeight)
     }
 
     private var emptyState: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: "checkmark.circle")
                 .foregroundStyle(.secondary)
 
-            Text(session.poller.lastSuccessAt == nil ? "Checking your inbox…" : "You're all caught up.")
-                .font(.callout)
+            Text(session.poller.lastSuccessAt == nil ? "Checking your inbox" : "Nothing needs you right now.")
+                .font(.body)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             if session.auth.isSignedIn {
                 Text(statusSummary)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-                Spacer()
-
-                if session.store.hasNotifications {
+            HStack(spacing: 8) {
+                if session.auth.isSignedIn, session.store.hasNotifications {
                     Button("Mark all read") {
                         Task { await session.markEverythingAsRead() }
                     }
-                    .buttonStyle(.link)
+                    .appButton(.standard)
                 }
 
-                Button("Sign out", action: session.signOut)
-                    .buttonStyle(.link)
-            } else {
-                Spacer()
-            }
+                Spacer(minLength: 0)
 
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
+                Button("Quit") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .appButton(.destructive)
             }
-            .buttonStyle(.link)
         }
-        .font(.caption)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var statusSummary: String {
@@ -218,5 +213,10 @@ struct InboxPanel: View {
         let secondsAgo = Int(now.timeIntervalSince(lastSuccessAt))
 
         return "\(unreadSummary) · checked \(secondsAgo)s ago"
+    }
+
+    private func openSettings() {
+        SettingsWindowPresenter.prepareForDisplay()
+        openWindow(id: GitHubNotificationsApp.settingsWindowIdentifier)
     }
 }
