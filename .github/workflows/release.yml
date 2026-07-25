@@ -20,9 +20,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A tag carrying a suffix (v1.2.0-beta.1) publishes as a pre-release, so it
+      # never becomes the release the updater offers to everyone.
       - name: Derive version from tag
         id: version
-        run: echo "number=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          NUMBER="${GITHUB_REF_NAME#v}"
+
+          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+
+          # CFBundleVersion only accepts period-separated integers, so a
+          # pre-release suffix is dropped from it.
+          echo "build=${NUMBER%%-*}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=" >> "$GITHUB_OUTPUT"
+          fi
 
       # The certificate gives the app a designated requirement that survives
       # rebuilds, so keychain access is granted once rather than after every
@@ -57,7 +72,10 @@ jobs:
             -s -k "${KEYCHAIN_PASSWORD}" signing.keychain >/dev/null
 
       - name: Build
-        run: ./scripts/build.sh release MARKETING_VERSION=${{ steps.version.outputs.number }}
+        run: |
+          ./scripts/build.sh release \
+            MARKETING_VERSION=${{ steps.version.outputs.number }} \
+            CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build }}
 
       # Publishing an unsigned build would silently reset every installed copy's
       # keychain grant, so a missing or wrong signature fails the release.
@@ -73,11 +91,24 @@ jobs:
 
           codesign -d -r- "${APP}"
 
+      # The zip is what the updater downloads; ditto round-trips a bundle
+      # without losing the signature. The DMG is for people.
       - name: Package
         run: |
-          ditto -c -k --keepParent \
-            "build/Build/Products/Release/GitHub Notifications.app" \
-            GitHubNotifications-${{ steps.version.outputs.number }}.zip
+          APP="build/Build/Products/Release/GitHub Notifications.app"
+          VERSION="${{ steps.version.outputs.number }}"
+
+          ditto -c -k --keepParent "${APP}" "GitHubNotifications-${VERSION}.zip"
+
+          mkdir -p dmg
+          cp -R "${APP}" dmg/
+          ln -s /Applications dmg/Applications
+
+          hdiutil create \
+            -volname "GitHub Notifications" \
+            -srcfolder dmg \
+            -ov -format UDZO \
+            "GitHubNotifications-${VERSION}.dmg"
 
       - name: Publish release
         env:
@@ -85,8 +116,10 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             "GitHubNotifications-${{ steps.version.outputs.number }}.zip" \
+            "GitHubNotifications-${{ steps.version.outputs.number }}.dmg" \
             --title "${GITHUB_REF_NAME}" \
-            --notes "The app is signed but not notarised, because notarisation needs a paid Apple Developer ID. After unzipping, open it once with right-click → Open, or run \`xattr -d com.apple.quarantine \"/Applications/GitHub Notifications.app\"\`."
+            ${{ steps.version.outputs.prerelease }} \
+            --notes "The app is signed but not notarised, because notarisation needs a paid Apple Developer ID. After opening the DMG or unzipping, open it once with right-click → Open, or run \`xattr -d com.apple.quarantine \"/Applications/GitHub Notifications.app\"\`."
 
       - name: Delete signing keychain
         if: always()

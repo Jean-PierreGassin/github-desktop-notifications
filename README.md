@@ -70,8 +70,8 @@ Use `public_repo` instead of `repo` if you only care about public repositories.
 
 Requires macOS 26 or newer.
 
-Download the latest zip from [Releases](../../releases), unzip it, and move `GitHub Notifications.app` to
-`/Applications`.
+Download the latest DMG from [Releases](../../releases) and drag `GitHub Notifications.app` to `/Applications`. The
+zip beside it is what the app's own updater downloads; either works.
 
 Releases are signed with a self-signed certificate and **not notarised**, because notarisation requires a paid Apple
 Developer ID. macOS will quarantine the download. Open it once with right-click → **Open**, or clear the flag:
