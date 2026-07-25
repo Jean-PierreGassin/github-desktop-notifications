@@ -6,7 +6,7 @@
   <a href="../../releases"><img src="https://img.shields.io/badge/Download-DMG-2ea44f?style=for-the-badge&logo=apple&logoColor=white" alt="Download" /></a>
   <a href="#install"><img src="https://img.shields.io/badge/macOS-26%2B-1f2328?style=for-the-badge" alt="macOS 26+" /></a>
   <a href="#contributing"><img src="https://img.shields.io/badge/Dependencies-0-8957e5?style=for-the-badge" alt="Zero dependencies" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="MIT License" /></a>
+  <a href="#licence"><img src="https://img.shields.io/badge/Licence-Source--available-yellow.svg?style=for-the-badge" alt="Source-available licence" /></a>
 </p>
 
 **GitHub Notifications** raises a real desktop notification the moment someone requests your review, mentions you, or
@@ -184,5 +184,11 @@ The banner and the app icon are drawn from the same geometry as the menu bar gly
 
 ## Licence
 
-MIT. The menu bar glyph, app icon and banner are original artwork. This project is not affiliated with or endorsed by
-GitHub.
+Copyright (c) 2026 Jean-Pierre Gassin. Source-available, not open source: read [LICENSE](LICENSE) for the exact terms.
+
+The short version. Use it, at home or at work. Change it. Share it. Send patches, they are welcome. What you may not do
+is make money from it: no selling copies, no charging for access, no bundling it into something you sell, no paid
+hosting of it. If you want to do any of that, ask.
+
+The menu bar glyph, app icon and banner are original artwork under the same terms. This project is not affiliated with
+or endorsed by GitHub.

@@ -260,7 +260,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "GitHub Notifications";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Jean-Pierre Gassin. MIT licensed.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Jean-Pierre Gassin. All rights reserved.";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jpgassin.GitHubNotifications;
 				PRODUCT_MODULE_NAME = GitHubNotifications;
@@ -283,7 +283,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "GitHub Notifications";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Jean-Pierre Gassin. MIT licensed.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Jean-Pierre Gassin. All rights reserved.";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jpgassin.GitHubNotifications;
 				PRODUCT_MODULE_NAME = GitHubNotifications;

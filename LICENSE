@@ -1,21 +1,64 @@
-MIT License
+GitHub Notifications for macOS
 
-Copyright (c) 2026 Jean-Pierre Gassin
+Copyright (c) 2026 Jean-Pierre Gassin. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software is source-available, not open source. You may read it, run it,
+change it and share it. You may not make money from it.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Grant
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   Subject to the terms below, you are granted a worldwide, royalty-free,
+   non-exclusive licence to:
+
+   a. use this software for any purpose, personal or within an organisation,
+      including at work;
+   b. copy, modify and create derivative works of it;
+   c. distribute it, with or without modification, provided this licence and
+      the copyright notice above travel with it; and
+   d. contribute changes back to the project.
+
+2. No commercial exploitation
+
+   You may not sell this software, any derivative of it, or any product or
+   service whose primary value is this software. That includes, without
+   limitation, selling copies, charging for access, licensing it on, bundling
+   it into a paid product, or offering it as a paid hosted service.
+
+   Using this software in the ordinary course of running a business, where the
+   business does not sell or resell the software itself, is permitted.
+
+3. Revenue
+
+   If you receive money that is attributable to this software or a derivative
+   of it, in breach of section 2 or otherwise, that money is owed to the
+   copyright holder, and this licence terminates unless the copyright holder
+   agrees otherwise in writing.
+
+4. Contributions
+
+   By contributing, you licence your contribution to the copyright holder under
+   the same terms, and confirm that you have the right to do so.
+
+5. Separate terms
+
+   The copyright holder may grant a commercial licence on different terms in
+   writing. Nothing here restricts your rights under law, including fair
+   dealing and fair use.
+
+6. Termination
+
+   This licence terminates automatically if you breach it. It is reinstated if
+   the breach is cured within 30 days of you becoming aware of it.
+
+7. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+   THE SOFTWARE.
+
+The menu bar glyph, app icon and banner are original artwork and are covered by
+the same terms. This project is not affiliated with or endorsed by GitHub.
