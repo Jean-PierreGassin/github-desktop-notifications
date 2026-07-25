@@ -108,20 +108,23 @@ enum NotificationReason: String, Sendable, CaseIterable, Codable {
         }
     }
 
+    /// Circled variants throughout, so no row's icon is optically lighter than
+    /// its neighbours. A bare `at` or `pencil` next to `checkmark.circle` reads
+    /// as a different size even at the same point size.
     var symbolName: String {
         switch self {
         case .reviewRequested, .approvalRequested: "checkmark.circle"
         case .assigned: "person.crop.circle"
-        case .mentioned, .teamMentioned: "at"
-        case .invitation: "envelope"
-        case .securityAlert, .securityAdvisoryCredit: "shield.lefthalf.filled"
-        case .author: "pencil"
-        case .comment: "bubble.left"
-        case .manual, .subscribed: "eye"
+        case .mentioned, .teamMentioned: "at.circle"
+        case .invitation: "envelope.circle"
+        case .securityAlert, .securityAdvisoryCredit: "exclamationmark.shield"
+        case .author: "pencil.circle"
+        case .comment: "bubble.left.circle"
+        case .manual, .subscribed: "eye.circle"
         case .stateChange: "arrow.triangle.branch"
-        case .ciActivity: "hammer"
+        case .ciActivity: "hammer.circle"
         case .memberFeatureRequested: "sparkles"
-        case .unrecognised: "bell"
+        case .unrecognised: "bell.circle"
         }
     }
 
