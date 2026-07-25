@@ -19,8 +19,9 @@ final class AppSession {
     let heldAlerts: HeldAlertQueue
     let launchAtLogin: LaunchAtLogin
 
+    static let defaultRowsPerRepository = 5
+
     private static let rowsPerRepositoryKey = "rowsPerRepository"
-    private static let defaultRowsPerRepository = 5
 
     private static let heldAlertCheckInterval: Duration = .seconds(30)
 
@@ -63,6 +64,13 @@ final class AppSession {
             store.rowsPerRepository = newValue
             defaults.set(newValue, forKey: Self.rowsPerRepositoryKey)
         }
+    }
+
+    /// The menu bar section's reset. Launching at login is a system registration
+    /// rather than a stored value, so it is turned off rather than forgotten.
+    func resetMenuBarPreferences() {
+        rowsPerRepository = Self.defaultRowsPerRepository
+        launchAtLogin.isEnabled = false
     }
 
     /// Unit tests load the app as their host, so the launch work is skipped to

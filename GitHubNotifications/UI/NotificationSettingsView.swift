@@ -2,167 +2,175 @@ import AppKit
 import SwiftUI
 
 struct NotificationSettingsView: View {
-    private static let reasonColumns = [GridItem(.flexible(), alignment: .leading),
-                                        GridItem(.flexible(), alignment: .leading)]
-    private static let optionColumns = [GridItem(.flexible(), alignment: .leading),
-                                        GridItem(.flexible(), alignment: .leading)]
+    /// One indent for every control that only makes sense while the control
+    /// above it is on, so subordination is never hand-tuned per site.
+    private static let dependentIndent: CGFloat = 20
 
     let session: AppSession
 
+    /// The preview is pinned below the form rather than placed in it, so it
+    /// stays in view while the settings that feed it are changed, however long
+    /// this page grows.
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top, spacing: 28) {
-                    alertTypes
+        VStack(spacing: 0) {
+            Form {
+                alerts
 
-                    Divider()
+                notificationTypes
 
-                    WorkHoursView(session: session)
-                        .frame(width: 400, alignment: .leading)
-                }
+                notificationContent
 
-                Divider()
-
-                notificationCustomisation
+                behaviour
             }
-            .padding(24)
-        }
-    }
-
-    private var alertTypes: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("What interrupts you")
-                    .font(.headline)
-
-                Text("Every notification appears in the menu bar panel. These decide which ones also reach macOS.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            presetPicker
+            .formStyle(.grouped)
 
             Divider()
 
-            reasonSections
-
-            Spacer(minLength: 0)
+            preview
         }
-        .frame(width: 380, alignment: .leading)
+        .font(.callout)
     }
 
-    private var presetPicker: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var alerts: some View {
+        Section {
             Picker("Notify me about", selection: presetBinding) {
                 ForEach(AlertPreset.allCases, id: \.self) { preset in
                     Text(preset.displayName).tag(preset)
                 }
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-
-            Text(session.alertPreferences.preset.summary)
-                .font(.callout)
+        } header: {
+            SettingsSectionHeader(title: "Alerts") { session.alertPreferences.resetToDefaults() }
+        } footer: {
+            Text("\(session.alertPreferences.preset.summary) Everything reaches the menu bar panel either way. "
+                + "Reset restores the preset and the types below with it.")
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var reasonSections: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    /// One section holding all fifteen, so they read as a single list rather
+    /// than as three settings groups peer to Content and Behaviour. The group
+    /// names are rows of their own, which keeps every checkbox on the form's
+    /// own alignment instead of a nested stack's.
+    private var notificationTypes: some View {
+        Section {
             ForEach(NotificationGroup.allCases, id: \.self) { group in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(group.displayName)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-
-                    LazyVGrid(columns: Self.reasonColumns, alignment: .leading, spacing: 6) {
-                        ForEach(session.alertPreferences.reasons(in: group), id: \.self) { reason in
-                            Toggle(reason.displayName, isOn: reasonBinding(for: reason))
-                                .toggleStyle(.checkbox)
-                                .font(.callout)
-                                .lineLimit(1)
-                                .help(reason.explanation)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var notificationCustomisation: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Notification customisation")
-                    .font(.headline)
-
-                Text("How each notification looks and sounds when macOS shows it. The menu bar panel is unaffected.")
-                    .font(.callout)
+                Text(group.displayName)
+                    .font(.caption)
+                    .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                    .textCase(.uppercase)
 
-            HStack(alignment: .top, spacing: 28) {
-                VStack(alignment: .leading, spacing: 8) {
-                    LazyVGrid(columns: Self.optionColumns, alignment: .leading, spacing: 8) {
-                        Toggle("Show the repository", isOn: contentBinding(\.showsRepository))
-
-                        Toggle("Show the thread title", isOn: contentBinding(\.showsThreadTitle))
-
-                        Toggle(
-                            "Include the owner in the repository name",
-                            isOn: contentBinding(\.showsFullRepositoryPath),
-                        )
-                        .disabled(!session.notificationContentPreferences.settings.showsRepository)
-
-                        Toggle("Show why you were notified", isOn: contentBinding(\.showsNotificationType))
-
-                        Toggle("Stack notifications by repository", isOn: contentBinding(\.groupsByRepository))
-
-                        Toggle("Play a sound", isOn: contentBinding(\.playsSound))
-                    }
-                    .font(.callout)
-
-                    soundPicker
-                        .padding(.leading, 18)
+                ForEach(session.alertPreferences.reasons(in: group), id: \.self) { reason in
+                    Toggle(reason.displayName, isOn: reasonBinding(for: reason))
+                        .toggleStyle(.checkbox)
+                        .help(reason.explanation)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    previewCard
-
-                    Button("Send a test notification") {
-                        Task {
-                            await session.notifier.sendTestNotification(
-                                settings: session.notificationContentPreferences.settings,
-                            )
-                        }
-                    }
-                    .appButton(.standard, size: .small)
-                    .disabled(session.notifier.needsPermission)
-                }
-                .frame(width: 320, alignment: .leading)
             }
+        } header: {
+            SettingsSectionHeader(title: "Notification types") { session.alertPreferences.resetToDefaults() }
         }
     }
 
-    private var soundPicker: some View {
-        HStack(spacing: 8) {
-            Text("Sound")
-                .font(.callout)
+    private var notificationContent: some View {
+        Section {
+            Toggle("Show the repository", isOn: contentBinding(\.showsRepository))
+
+            Toggle("Include the owner in the repository name", isOn: contentBinding(\.showsFullRepositoryPath))
+                .disabled(!session.notificationContentPreferences.settings.showsRepository)
+                .padding(.leading, Self.dependentIndent)
+
+            Toggle("Show the thread title", isOn: contentBinding(\.showsThreadTitle))
+
+            Toggle("Show why you were notified", isOn: contentBinding(\.showsNotificationType))
+        } header: {
+            SettingsSectionHeader(title: "Notification content") {
+                session.notificationContentPreferences.resetContent()
+            }
+        } footer: {
+            Text("What each notification says when macOS shows it. The menu bar panel is unaffected.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var behaviour: some View {
+        Section {
+            Toggle("Stack notifications by repository", isOn: contentBinding(\.groupsByRepository))
+
+            Toggle("Play a sound", isOn: contentBinding(\.playsSound))
 
             Picker("Sound", selection: soundBinding) {
                 ForEach(NotificationSound.allCases, id: \.self) { sound in
                     Text(sound.displayName).tag(sound)
                 }
             }
-            .labelsHidden()
-            .frame(width: 140)
+            .disabled(!session.notificationContentPreferences.settings.playsSound)
+            .padding(.leading, Self.dependentIndent)
+        } header: {
+            SettingsSectionHeader(title: "Behaviour") { session.notificationContentPreferences.resetBehaviour() }
+        } footer: {
+            Text("Stacking keeps a busy repository to one banner. Choosing a sound plays it.")
+                .foregroundStyle(.secondary)
         }
-        .disabled(!session.notificationContentPreferences.settings.playsSound)
+    }
+
+    /// The preview holds no settings of its own, so it carries no reset.
+    private var preview: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Preview")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                previewCard
+            }
+
+            Button("Send a test notification") {
+                Task {
+                    await session.notifier.sendTestNotification(
+                        settings: session.notificationContentPreferences.settings,
+                    )
+                }
+            }
+            .appButton(.standard, size: .small)
+            .disabled(session.notifier.needsPermission)
+        }
+        .padding(16)
+        .background(.bar)
+    }
+
+    private var previewCard: some View {
+        let preview = NotificationContentFormatter.make(
+            for: SampleNotification.thread,
+            settings: session.notificationContentPreferences.settings,
+        )
+
+        return HStack(alignment: .top, spacing: 10) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .frame(width: 38, height: 38)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(preview.title)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+
+                if !preview.subtitle.isEmpty {
+                    Text(preview.subtitle)
+                        .lineLimit(1)
+                }
+
+                Text(preview.body)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
     }
 
     /// Choosing a sound plays it, so there is nothing extra to press.
@@ -174,49 +182,6 @@ struct NotificationSettingsView: View {
                 sound.play()
             },
         )
-    }
-
-    private var previewCard: some View {
-        let preview = NotificationContentFormatter.make(
-            for: SampleNotification.thread,
-            settings: session.notificationContentPreferences.settings,
-        )
-
-        return VStack(alignment: .leading, spacing: 6) {
-            Text("Preview")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-
-            HStack(alignment: .top, spacing: 10) {
-                Image(nsImage: NSApplication.shared.applicationIconImage)
-                    .resizable()
-                    .frame(width: 38, height: 38)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(preview.title)
-                        .font(.callout)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-
-                    if !preview.subtitle.isEmpty {
-                        Text(preview.subtitle)
-                            .font(.callout)
-                            .lineLimit(1)
-                    }
-
-                    Text(preview.body)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(12)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
-        }
     }
 
     private var presetBinding: Binding<AlertPreset> {

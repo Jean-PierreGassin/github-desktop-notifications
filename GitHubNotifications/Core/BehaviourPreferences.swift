@@ -5,6 +5,8 @@ import Foundation
 @MainActor
 @Observable
 final class BehaviourPreferences {
+    static let defaultMarksAsReadOnOpen = true
+
     private static let marksAsReadOnOpenKey = "marksAsReadOnOpen"
     private static let hasChosenMarkAsReadBehaviourKey = "hasChosenMarkAsReadBehaviour"
 
@@ -24,7 +26,13 @@ final class BehaviourPreferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        marksAsReadOnOpen = defaults.object(forKey: Self.marksAsReadOnOpenKey) as? Bool ?? true
+        marksAsReadOnOpen = defaults.object(forKey: Self.marksAsReadOnOpenKey) as? Bool ?? Self.defaultMarksAsReadOnOpen
         hasChosenMarkAsReadBehaviour = defaults.bool(forKey: Self.hasChosenMarkAsReadBehaviourKey)
+    }
+
+    /// The one-time prompt is left alone: it is a record of a question already
+    /// asked, not a preference, and re-asking it would be a surprise.
+    func resetToDefaults() {
+        marksAsReadOnOpen = Self.defaultMarksAsReadOnOpen
     }
 }

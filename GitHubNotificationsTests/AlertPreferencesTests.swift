@@ -97,6 +97,19 @@ struct AlertPreferencesTests {
         #expect(!makePreferences().reasons(in: .low).contains(.unrecognised))
     }
 
+    @Test
+    func resettingForgetsTheHandPickedSetAsWellAsThePreset() {
+        let defaults = makeDefaults()
+        let preferences = AlertPreferences(defaults: defaults)
+        preferences.setEnabled(true, for: .ciActivity)
+
+        preferences.resetToDefaults()
+
+        #expect(preferences.preset == .essential)
+        #expect(!preferences.allowsAlert(for: .ciActivity))
+        #expect(AlertPreferences(defaults: defaults).preset == .essential)
+    }
+
     private func makePreferences() -> AlertPreferences {
         AlertPreferences(defaults: makeDefaults())
     }

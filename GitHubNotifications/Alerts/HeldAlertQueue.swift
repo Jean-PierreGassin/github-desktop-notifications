@@ -87,37 +87,3 @@ final class HeldAlertQueue {
             .appending(path: "held-alerts.json")
     }
 }
-
-/// Persists the work hours settings.
-@MainActor
-@Observable
-final class WorkHoursPreferences {
-    private static let storageKey = "workHours"
-
-    private let defaults: UserDefaults
-
-    var hours: WorkHours {
-        didSet { save() }
-    }
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-
-        guard let stored = defaults.data(forKey: Self.storageKey),
-              let decoded = try? JSONDecoder().decode(WorkHours.self, from: stored)
-        else {
-            hours = WorkHours()
-            return
-        }
-
-        hours = decoded
-    }
-
-    private func save() {
-        guard let encoded = try? JSONEncoder().encode(hours) else {
-            return
-        }
-
-        defaults.set(encoded, forKey: Self.storageKey)
-    }
-}

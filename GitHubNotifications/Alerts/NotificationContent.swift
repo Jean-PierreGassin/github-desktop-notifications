@@ -83,6 +83,26 @@ final class NotificationContentPreferences {
         settings = decoded
     }
 
+    /// Settings reset one section at a time, so what a banner says and how it
+    /// behaves are restored separately. Both read their defaults from a fresh
+    /// ``NotificationContentSettings`` rather than repeating them.
+    func resetContent() {
+        let defaults = NotificationContentSettings()
+
+        settings.showsRepository = defaults.showsRepository
+        settings.showsFullRepositoryPath = defaults.showsFullRepositoryPath
+        settings.showsThreadTitle = defaults.showsThreadTitle
+        settings.showsNotificationType = defaults.showsNotificationType
+    }
+
+    func resetBehaviour() {
+        let defaults = NotificationContentSettings()
+
+        settings.groupsByRepository = defaults.groupsByRepository
+        settings.playsSound = defaults.playsSound
+        settings.sound = defaults.sound
+    }
+
     private func save() {
         guard let encoded = try? JSONEncoder().encode(settings) else {
             return

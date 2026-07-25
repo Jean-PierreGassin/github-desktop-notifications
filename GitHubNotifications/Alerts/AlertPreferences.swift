@@ -49,6 +49,10 @@ enum AlertPreset: String, Sendable, CaseIterable, Codable {
 @MainActor
 @Observable
 final class AlertPreferences {
+    /// The one definition of what "default" means here, shared by the
+    /// initialiser and by the reset control in Settings.
+    static let defaultPreset = AlertPreset.essential
+
     private static let presetKey = "alertPreset"
     private static let customReasonsKey = "customAlertReasons"
 
@@ -61,7 +65,7 @@ final class AlertPreferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        preset = defaults.string(forKey: Self.presetKey).flatMap(AlertPreset.init(rawValue:)) ?? .essential
+        preset = defaults.string(forKey: Self.presetKey).flatMap(AlertPreset.init(rawValue:)) ?? Self.defaultPreset
         customReasons = Set(
             (defaults.stringArray(forKey: Self.customReasonsKey) ?? []).compactMap(NotificationReason.init(rawValue:)),
         )
@@ -102,6 +106,14 @@ final class AlertPreferences {
 
     func reasons(in group: NotificationGroup) -> [NotificationReason] {
         NotificationReason.togglableCases.filter { $0.group == group }
+    }
+
+    /// Drops the hand-picked set as well as the preset, so resetting cannot
+    /// leave a stale custom selection waiting to reappear.
+    func resetToDefaults() {
+        preset = Self.defaultPreset
+        customReasons = []
+        save()
     }
 
     /// Keeps the selection honest: hand-picking exactly what a preset covers
