@@ -125,9 +125,7 @@ struct GitHubClient: GitHubAPI {
     }
 
     private var userAgent: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
-
-        return "GitHubNotifications/\(version) (macOS menu bar app)"
+        "GitHubNotifications/\(AppVersion.current) (macOS menu bar app)"
     }
 
     private func rateLimitError(headers: ResponseHeaders, statusCode: Int) -> GitHubError {
