@@ -68,6 +68,8 @@ Use `public_repo` instead of `repo` if you only care about public repositories.
 
 ## Install
 
+Requires macOS 26 or newer.
+
 Download the latest zip from [Releases](../../releases), unzip it, and move `GitHub Notifications.app` to
 `/Applications`.
 
@@ -96,7 +98,7 @@ organisation administrator is involved in that step.
 
 ## Build from source
 
-Requires Xcode 26 or newer, on macOS 14 or newer.
+Requires Xcode 26 or newer, on macOS 26 or newer.
 
 ```sh
 git clone https://github.com/Jean-PierreGassin/github-desktop-notifications.git

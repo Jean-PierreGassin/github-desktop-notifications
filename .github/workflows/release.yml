@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Pinned rather than macos-latest: a 26.0 deployment target needs the macOS
+    # 26 SDK, and a runner rolling back to an older image would fail the build.
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v4
