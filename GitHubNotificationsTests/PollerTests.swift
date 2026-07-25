@@ -48,7 +48,7 @@ struct PollerTests {
         let poller = Poller(
             api: api,
             auth: AuthService(api: api, storage: InMemoryTokenStorage(), log: AppLog(subsystem: "tests")),
-            store: NotificationStore(),
+            store: Fixtures.store(),
             log: AppLog(subsystem: "tests"),
         )
 
@@ -127,7 +127,7 @@ struct PollerTests {
     private func makeContext(api: FakeGitHubAPI = FakeGitHubAPI()) async -> Context {
         let log = AppLog(subsystem: "tests")
         let auth = AuthService(api: api, storage: InMemoryTokenStorage(), log: log)
-        let store = NotificationStore()
+        let store = Fixtures.store()
 
         await auth.signIn(withToken: "ghp_valid")
 

@@ -10,6 +10,7 @@ struct MenuBarLabel: View {
     let session: AppSession
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openWindow) private var openWindow
 
     @State private var isPulsing = false
 
@@ -22,6 +23,16 @@ struct MenuBarLabel: View {
         .task { await session.start() }
         .onReceive(Timer.publish(every: Self.pulseInterval, on: .main, in: .common).autoconnect()) { _ in
             pulse()
+        }
+        // The first-run question is a sheet on Settings, so the window has to be
+        // brought up behind it. The status item is the only view alive at launch.
+        .onChange(of: session.isAskingForClickBehaviour) { _, isAsking in
+            guard isAsking else {
+                return
+            }
+
+            SettingsWindowPresenter.prepareForDisplay()
+            openWindow(id: GitHubNotificationsApp.settingsWindowIdentifier)
         }
     }
 

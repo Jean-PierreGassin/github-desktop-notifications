@@ -2,9 +2,9 @@ import SwiftUI
 
 struct RepositoryGroupView: View {
     let group: RepositoryGroup
+    let clickBehaviour: ClickBehaviour
     let onOpenThread: (NotificationThread) -> Void
-    let onMarkThreadRead: (NotificationThread) -> Void
-    let onDismissThread: (NotificationThread) -> Void
+    let onApplyToThread: (ClickBehaviour, NotificationThread) -> Void
     let onOpenInbox: () -> Void
 
     var body: some View {
@@ -14,9 +14,9 @@ struct RepositoryGroupView: View {
             ForEach(group.visibleThreads) { thread in
                 NotificationRowView(
                     thread: thread,
+                    clickBehaviour: clickBehaviour,
                     onOpen: { onOpenThread(thread) },
-                    onMarkRead: { onMarkThreadRead(thread) },
-                    onDismiss: { onDismissThread(thread) },
+                    onApply: { behaviour in onApplyToThread(behaviour, thread) },
                 )
             }
 
