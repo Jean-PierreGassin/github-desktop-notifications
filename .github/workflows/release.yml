@@ -14,6 +14,9 @@ jobs:
     # 26 SDK, and a runner rolling back to an older image would fail the build.
     runs-on: macos-26
 
+    env:
+      SIGNING_IDENTITY: GitHub Notifications Signing
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,8 +24,54 @@ jobs:
         id: version
         run: echo "number=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # The certificate gives the app a designated requirement that survives
+      # rebuilds, so keychain access is granted once rather than after every
+      # update. The runner keychain is temporary and deleted below.
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.SIGNING_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if [[ -z "${CERTIFICATE_P12}" ]]; then
+            echo "::error::SIGNING_CERTIFICATE_P12 is not set, refusing to publish an unsigned build"
+            exit 1
+          fi
+
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" signing.keychain
+          security set-keychain-settings -lut 3600 signing.keychain
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" signing.keychain
+          security list-keychains -d user -s signing.keychain login.keychain-db
+
+          echo "${CERTIFICATE_P12}" | base64 --decode > certificate.p12
+          security import certificate.p12 \
+            -k signing.keychain \
+            -P "${CERTIFICATE_PASSWORD}" \
+            -T /usr/bin/codesign \
+            -f pkcs12
+          rm certificate.p12
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "${KEYCHAIN_PASSWORD}" signing.keychain >/dev/null
+
       - name: Build
         run: ./scripts/build.sh release MARKETING_VERSION=${{ steps.version.outputs.number }}
+
+      # Publishing an unsigned build would silently reset every installed copy's
+      # keychain grant, so a missing or wrong signature fails the release.
+      - name: Verify signature
+        run: |
+          APP="build/Build/Products/Release/GitHub Notifications.app"
+
+          codesign --verify --strict --verbose=2 "${APP}"
+
+          codesign -dv --verbose=4 "${APP}" 2>&1 \
+            | grep -q "Authority=${SIGNING_IDENTITY}" \
+            || { echo "::error::release build is not signed with the expected identity"; exit 1; }
+
+          codesign -d -r- "${APP}"
 
       - name: Package
         run: |
@@ -37,4 +86,10 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             "GitHubNotifications-${{ steps.version.outputs.number }}.zip" \
             --title "${GITHUB_REF_NAME}" \
-            --notes "The app is ad-hoc signed and not notarised. After unzipping, open it once with right-click → Open, or run \`xattr -d com.apple.quarantine GitHubNotifications.app\`."
+            --notes "The app is signed but not notarised, because notarisation needs a paid Apple Developer ID. After unzipping, open it once with right-click → Open, or run \`xattr -d com.apple.quarantine \"/Applications/GitHub Notifications.app\"\`."
+
+      - name: Delete signing keychain
+        if: always()
+        run: |
+          security list-keychains -d user -s login.keychain-db
+          security delete-keychain signing.keychain || true
