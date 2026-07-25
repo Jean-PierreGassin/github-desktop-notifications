@@ -1,14 +1,10 @@
 import SwiftUI
 
 struct BehaviourSettingsView: View {
-    private static let rowLimits = 1 ... 20
-
     let session: AppSession
 
     var body: some View {
         Form {
-            notifications
-
             menuBar
 
             updates
@@ -17,18 +13,6 @@ struct BehaviourSettingsView: View {
         }
         .formStyle(.grouped)
         .font(.callout)
-    }
-
-    private var notifications: some View {
-        Section {
-            Toggle("Mark a notification as read when I open it", isOn: marksAsReadBinding)
-        } header: {
-            SettingsSectionHeader(title: "Notifications") { session.behaviourPreferences.resetToDefaults() }
-        } footer: {
-            Text("Opening a notification usually means you have dealt with it, but some people keep their inbox "
-                + "as a to-do list.")
-                .foregroundStyle(.secondary)
-        }
     }
 
     private var menuBar: some View {
@@ -42,7 +26,7 @@ struct BehaviourSettingsView: View {
                         .frame(width: 52)
                         .multilineTextAlignment(.center)
 
-                    Stepper("", value: rowsPerRepositoryBinding, in: Self.rowLimits)
+                    Stepper("", value: rowsPerRepositoryBinding, in: AppSession.rowsPerRepositoryLimits)
                         .labelsHidden()
                 }
             }
@@ -102,13 +86,6 @@ struct BehaviourSettingsView: View {
         return user.account.login
     }
 
-    private var marksAsReadBinding: Binding<Bool> {
-        Binding(
-            get: { session.behaviourPreferences.marksAsReadOnOpen },
-            set: { session.behaviourPreferences.marksAsReadOnOpen = $0 },
-        )
-    }
-
     private var launchAtLoginBinding: Binding<Bool> {
         Binding(
             get: { session.launchAtLogin.isEnabled },
@@ -116,10 +93,12 @@ struct BehaviourSettingsView: View {
         )
     }
 
+    /// The session clamps this too, because a value stored before the limit
+    /// dropped to ten has to come down on read as well as on edit.
     private var rowsPerRepositoryBinding: Binding<Int> {
         Binding(
             get: { session.rowsPerRepository },
-            set: { session.rowsPerRepository = min(max($0, Self.rowLimits.lowerBound), Self.rowLimits.upperBound) },
+            set: { session.rowsPerRepository = $0 },
         )
     }
 }

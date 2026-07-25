@@ -13,6 +13,13 @@ protocol GitHubAPI: Sendable {
     /// - Throws: ``GitHubError`` when GitHub rejects the request or the network fails.
     func fetchNotifications(usingToken token: String, since lastModified: String?) async throws -> NotificationsResponse
 
+    /// Fetches the inbox including threads already read, used only to find out
+    /// which of them still exist. Unconditional and uncached, so it is called
+    /// rarely rather than on the polling loop.
+    ///
+    /// - Throws: ``GitHubError`` when GitHub rejects the request or the network fails.
+    func fetchEntireInbox(usingToken token: String) async throws -> [NotificationThread]
+
     /// - Throws: ``GitHubError`` when GitHub rejects the request or the network fails.
     func markThreadAsRead(threadIdentifier: String, usingToken token: String) async throws
 

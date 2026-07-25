@@ -77,4 +77,27 @@ struct NotificationThread: Sendable, Equatable, Codable, Identifiable {
         case subject
         case repository
     }
+
+    /// GitHub's inbox endpoint returns unread threads only, so a thread the user
+    /// has read never comes back marked read - it simply stops coming back. The
+    /// read copy is made here and kept locally.
+    func markedRead() -> NotificationThread {
+        marked(unread: false)
+    }
+
+    /// Used to put a row back when GitHub refuses the change behind it.
+    func markedUnread() -> NotificationThread {
+        marked(unread: true)
+    }
+
+    private func marked(unread: Bool) -> NotificationThread {
+        NotificationThread(
+            id: id,
+            isUnread: unread,
+            reason: reason,
+            updatedAt: updatedAt,
+            subject: subject,
+            repository: repository,
+        )
+    }
 }

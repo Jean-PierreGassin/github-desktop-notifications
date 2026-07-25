@@ -43,4 +43,27 @@ enum Fixtures {
             repository: repository,
         )
     }
+
+    /// A directory of its own per test, so ledgers never touch the real
+    /// Application Support folder or each other.
+    static func temporaryDirectory() -> URL {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        return directory
+    }
+
+    @MainActor
+    static func readLedger() -> ReadThreadLedger {
+        ReadThreadLedger(
+            fileURL: temporaryDirectory().appending(path: "read-threads.json"),
+            log: AppLog(subsystem: "tests"),
+        )
+    }
+
+    @MainActor
+    static func store(rowsPerRepository: Int = 5, readLedger: ReadThreadLedger? = nil) -> NotificationStore {
+        NotificationStore(rowsPerRepository: rowsPerRepository, readLedger: readLedger ?? Fixtures.readLedger())
+    }
 }

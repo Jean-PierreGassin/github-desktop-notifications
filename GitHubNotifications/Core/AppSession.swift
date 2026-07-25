@@ -21,21 +21,51 @@ final class AppSession {
 
     static let defaultRowsPerRepository = 5
 
+    /// Read rows count against this limit as well as unread ones, so it is lower
+    /// than it was: ten rows of one repository is already a wall of text.
+    static let rowsPerRepositoryLimits = 1 ... 10
+
     private static let rowsPerRepositoryKey = "rowsPerRepository"
 
     private static let heldAlertCheckInterval: Duration = .seconds(30)
 
+    /// Reconciliation is a full, unconditional read of the inbox, so it runs
+    /// rarely. Losing it degrades gracefully: read rows then linger until the
+    /// visible-row limit evicts them.
+    private static let reconciliationInterval: Duration = .seconds(3600)
+
     private let api: GitHubAPI
     private let ledger: SeenThreadLedger
+    private let readLedger: ReadThreadLedger
     private let defaults: UserDefaults
 
     private var heldAlertLoop: Task<Void, Never>?
+    private var reconciliationLoop: Task<Void, Never>?
 
+    /// The last action that GitHub refused, shown in the panel. The row it
+    /// touched has already been put back by the time this is set.
+    private(set) var lastActionFailure: String?
+
+    /// How far through a bulk dismiss the app is, so a hundred sequential
+    /// deletes do not look like a freeze.
+    private(set) var bulkProgress: String?
+
+    /// Set once, right after the first successful sign-in. The menu bar opens
+    /// Settings when it turns true, and Settings shows the choice as a sheet.
+    private(set) var isAskingForClickBehaviour = false
+
+    /// The setting to draw attention to once the sheet closes, so the user is
+    /// shown where the choice they just made lives.
+    private(set) var highlightedSettingsField: SettingsField?
+
+    /// `supportDirectory` exists so tests can keep their ledgers out of the real
+    /// Application Support folder.
     init(
         log: AppLog = AppLog.shared,
         api: GitHubAPI = GitHubClient(),
         storage: TokenStorage = KeychainTokenStorage(),
         defaults: UserDefaults = .standard,
+        supportDirectory: URL? = nil,
     ) {
         self.log = log
         self.api = api
@@ -44,8 +74,10 @@ final class AppSession {
         let storedRowsPerRepository = defaults.integer(forKey: Self.rowsPerRepositoryKey)
 
         auth = AuthService(api: api, storage: storage, log: log)
+        readLedger = ReadThreadLedger(fileURL: supportDirectory?.appending(path: "read-threads.json"), log: log)
         store = NotificationStore(
-            rowsPerRepository: storedRowsPerRepository > 0 ? storedRowsPerRepository : Self.defaultRowsPerRepository,
+            rowsPerRepository: Self.clampRowsPerRepository(storedRowsPerRepository),
+            readLedger: readLedger,
         )
         notifier = Notifier(log: log)
         alertPreferences = AlertPreferences(defaults: defaults)
@@ -54,16 +86,28 @@ final class AppSession {
         behaviourPreferences = BehaviourPreferences(defaults: defaults)
         heldAlerts = HeldAlertQueue(log: log)
         launchAtLogin = LaunchAtLogin(log: log)
-        ledger = SeenThreadLedger(log: log)
+        ledger = SeenThreadLedger(fileURL: supportDirectory?.appending(path: "seen-threads.json"), log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
     }
 
     var rowsPerRepository: Int {
         get { store.rowsPerRepository }
         set {
-            store.rowsPerRepository = newValue
-            defaults.set(newValue, forKey: Self.rowsPerRepositoryKey)
+            let clamped = Self.clampRowsPerRepository(newValue)
+
+            store.rowsPerRepository = clamped
+            defaults.set(clamped, forKey: Self.rowsPerRepositoryKey)
         }
+    }
+
+    /// A value stored before the limit dropped to ten is clamped on read rather
+    /// than left to show more rows than the panel is built for.
+    private static func clampRowsPerRepository(_ storedValue: Int) -> Int {
+        guard storedValue > 0 else {
+            return defaultRowsPerRepository
+        }
+
+        return min(max(storedValue, rowsPerRepositoryLimits.lowerBound), rowsPerRepositoryLimits.upperBound)
     }
 
     /// The menu bar section's reset. Launching at login is a system registration
@@ -94,9 +138,42 @@ final class AppSession {
 
         if auth.isSignedIn {
             poller.start()
+            askForClickBehaviourIfNeeded()
+            await reconcileReadThreads()
         }
 
         startHeldAlertLoop()
+        startReconciliationLoop()
+    }
+
+    /// Polling stays unread-only and conditional, which is what makes an idle
+    /// inbox free. This is the one call that reads the whole inbox, and it exists
+    /// only to find out which locally-held read threads still exist.
+    private func startReconciliationLoop() {
+        guard reconciliationLoop == nil else {
+            return
+        }
+
+        reconciliationLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.reconciliationInterval)
+                await self?.reconcileReadThreads()
+            }
+        }
+    }
+
+    private func reconcileReadThreads() async {
+        guard let token = auth.activeToken else {
+            return
+        }
+
+        do {
+            let inbox = try await api.fetchEntireInbox(usingToken: token)
+
+            store.reconcile(withInboxIdentifiers: Set(inbox.map(\.id)))
+        } catch {
+            log.debug("Couldn't reconcile read notifications: \(error.localizedDescription)")
+        }
     }
 
     /// Held alerts are released on their own schedule, independent of polling,
@@ -182,10 +259,46 @@ final class AppSession {
     func signIn(withToken token: String) async {
         await auth.signIn(withToken: token)
 
-        if auth.isSignedIn {
-            poller.reset()
-            poller.start()
+        guard auth.isSignedIn else {
+            return
         }
+
+        poller.reset()
+        poller.start()
+        askForClickBehaviourIfNeeded()
+    }
+
+    /// Asked once, straight after signing in, because what a click does to
+    /// someone's inbox is not a thing to discover by accident.
+    private func askForClickBehaviourIfNeeded() {
+        guard !behaviourPreferences.hasChosenClickBehaviour else {
+            return
+        }
+
+        isAskingForClickBehaviour = true
+    }
+
+    func chooseClickBehaviour(_ behaviour: ClickBehaviour) {
+        behaviourPreferences.clickBehaviour = behaviour
+        behaviourPreferences.hasChosenClickBehaviour = true
+        isAskingForClickBehaviour = false
+        highlightedSettingsField = .clickBehaviour
+
+        log.info("Clicking a notification now marks it \(behaviour.displayName.lowercased()).")
+    }
+
+    /// Closing the sheet without answering keeps whatever is already set and
+    /// does not ask again. The question is a courtesy, not a gate.
+    func dismissClickBehaviourPrompt() {
+        guard isAskingForClickBehaviour else {
+            return
+        }
+
+        chooseClickBehaviour(behaviourPreferences.clickBehaviour)
+    }
+
+    func clearSettingsHighlight() {
+        highlightedSettingsField = nil
     }
 
     func signOut() {
@@ -197,84 +310,134 @@ final class AppSession {
         auth.signOut()
     }
 
+    /// Opening always goes to the browser first; what happens to the row is
+    /// whatever the user chose, applied by the one path below.
     func open(_ thread: NotificationThread) {
-        askAboutMarkingAsReadIfNeeded()
-
         NSWorkspace.shared.open(ThreadURL.derive(for: thread))
 
-        guard behaviourPreferences.marksAsReadOnOpen else {
-            return
-        }
-
-        Task { await markAsRead(thread) }
-    }
-
-    /// Asked once, the first time a notification is opened, because silently
-    /// clearing someone's inbox is a surprise if they use it as a to-do list.
-    private func askAboutMarkingAsReadIfNeeded() {
-        guard !behaviourPreferences.hasChosenMarkAsReadBehaviour else {
-            return
-        }
-
-        behaviourPreferences.hasChosenMarkAsReadBehaviour = true
-
-        let prompt = NSAlert()
-        prompt.messageText = "Mark notifications as read when you open them?"
-        prompt.informativeText = "Opening a notification usually means you have dealt with it, so it can be cleared "
-            + "from your inbox automatically. You can change this later in Settings."
-        prompt.addButton(withTitle: "Yes")
-        prompt.addButton(withTitle: "No, I will mark them myself")
-
-        NSApplication.shared.activate(ignoringOtherApps: true)
-
-        behaviourPreferences.marksAsReadOnOpen = prompt.runModal() == .alertFirstButtonReturn
-        log.info("Marking as read on open is \(behaviourPreferences.marksAsReadOnOpen ? "on" : "off").")
+        Task { await apply(behaviourPreferences.clickBehaviour, to: thread) }
     }
 
     func openInbox() {
         NSWorkspace.shared.open(Self.inboxURL)
     }
 
-    func markAsDone(_ thread: NotificationThread) async {
+    func dismissFailure() {
+        lastActionFailure = nil
+    }
+
+    /// The single entry point for a row click, the row button and the context
+    /// menu, so a button can never do something a click would not.
+    ///
+    /// The panel changes first and GitHub is told afterwards. A refusal puts the
+    /// row back exactly where it was rather than leaving the panel lying.
+    func apply(_ behaviour: ClickBehaviour, to thread: NotificationThread) async {
         guard let token = auth.activeToken else {
+            return
+        }
+
+        let originalIndex = store.threads.firstIndex(where: { $0.id == thread.id })
+
+        applyLocally(behaviour, to: thread)
+
+        do {
+            if behaviour.marksAsRead {
+                try await api.markThreadAsRead(threadIdentifier: thread.id, usingToken: token)
+            }
+
+            if behaviour.dismisses {
+                try await api.markThreadAsDone(threadIdentifier: thread.id, usingToken: token)
+            }
+        } catch {
+            rollBack(behaviour, of: thread, to: originalIndex)
+            report(error, whileApplying: behaviour, to: thread)
+        }
+    }
+
+    private func applyLocally(_ behaviour: ClickBehaviour, to thread: NotificationThread) {
+        guard behaviour.dismisses else {
+            store.markRead(thread.id)
             return
         }
 
         store.removeThread(withIdentifier: thread.id)
-
-        do {
-            try await api.markThreadAsDone(threadIdentifier: thread.id, usingToken: token)
-        } catch {
-            log.warning("Couldn't mark \(thread.subject.title) as done: \(error.localizedDescription)")
-        }
     }
 
-    func markEverythingAsRead() async {
+    private func rollBack(_ behaviour: ClickBehaviour, of thread: NotificationThread, to index: Int?) {
+        guard behaviour.dismisses else {
+            store.unmarkRead(thread.id)
+            return
+        }
+
+        store.restore(thread, at: index ?? 0)
+    }
+
+    private func report(_ error: Error, whileApplying behaviour: ClickBehaviour, to thread: NotificationThread) {
+        let reason = (error as? GitHubError)?.userFacingMessage ?? error.localizedDescription
+
+        lastActionFailure = "Couldn't \(behaviour.actionTitle.lowercased()) \(thread.subject.title). \(reason)"
+        log.warning(lastActionFailure ?? "")
+    }
+
+    /// Marking the whole inbox read is one request. Dismissing has no bulk
+    /// endpoint at all, so it is one request per thread, run in order with
+    /// progress reported rather than freezing the panel.
+    func applyToEverything(_ behaviour: ClickBehaviour) async {
         guard let token = auth.activeToken else {
             return
         }
 
-        store.removeAll()
+        if behaviour.marksAsRead {
+            await markEverythingAsRead(usingToken: token, keepingRows: !behaviour.dismisses)
+        }
 
+        guard behaviour.dismisses else {
+            return
+        }
+
+        await dismissEverything(usingToken: token)
+    }
+
+    /// Under plain Read the rows stay, so each one is marked read locally too.
+    /// Under a dismissing behaviour they are about to go anyway.
+    private func markEverythingAsRead(usingToken token: String, keepingRows: Bool) async {
         do {
             try await api.markEverythingAsRead(usingToken: token)
             log.info("Marked the whole inbox as read.")
+
+            guard keepingRows else {
+                return
+            }
+
+            store.threads.map(\.id).forEach(store.markRead)
         } catch {
-            log.warning("Couldn't mark everything as read: \(error.localizedDescription)")
+            lastActionFailure = "Couldn't mark everything as read. \(userFacingReason(for: error))"
+            log.warning(lastActionFailure ?? "")
         }
     }
 
-    func markAsRead(_ thread: NotificationThread) async {
-        guard let token = auth.activeToken else {
-            return
+    private func dismissEverything(usingToken token: String) async {
+        let threads = store.threads
+
+        defer { bulkProgress = nil }
+
+        for (offset, thread) in threads.enumerated() {
+            bulkProgress = "Dismissing \(offset + 1) of \(threads.count)"
+
+            do {
+                try await api.markThreadAsDone(threadIdentifier: thread.id, usingToken: token)
+                store.removeThread(withIdentifier: thread.id)
+            } catch {
+                lastActionFailure = "Stopped after \(offset) of \(threads.count). \(userFacingReason(for: error))"
+                log.warning(lastActionFailure ?? "")
+                return
+            }
         }
 
-        store.removeThread(withIdentifier: thread.id)
+        log.info("Dismissed \(threads.count) notifications.")
+    }
 
-        do {
-            try await api.markThreadAsRead(threadIdentifier: thread.id, usingToken: token)
-        } catch {
-            log.warning("Couldn't mark \(thread.subject.title) as read: \(error.localizedDescription)")
-        }
+    private func userFacingReason(for error: Error) -> String {
+        (error as? GitHubError)?.userFacingMessage ?? error.localizedDescription
     }
 }

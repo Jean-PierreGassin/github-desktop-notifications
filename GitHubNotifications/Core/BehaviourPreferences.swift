@@ -5,34 +5,56 @@ import Foundation
 @MainActor
 @Observable
 final class BehaviourPreferences {
-    static let defaultMarksAsReadOnOpen = true
+    private static let clickBehaviourKey = "clickBehaviour"
+    private static let hasChosenClickBehaviourKey = "hasChosenClickBehaviour"
 
-    private static let marksAsReadOnOpenKey = "marksAsReadOnOpen"
-    private static let hasChosenMarkAsReadBehaviourKey = "hasChosenMarkAsReadBehaviour"
+    /// The boolean this preference replaced. Read once to carry the existing
+    /// choice across, then deleted.
+    private static let retiredMarksAsReadOnOpenKey = "marksAsReadOnOpen"
+    private static let retiredHasChosenKey = "hasChosenMarkAsReadBehaviour"
 
     private let defaults: UserDefaults
 
-    /// Opening a notification usually means you have dealt with it, but some
-    /// people keep their inbox as a to-do list.
-    var marksAsReadOnOpen: Bool {
-        didSet { defaults.set(marksAsReadOnOpen, forKey: Self.marksAsReadOnOpenKey) }
+    var clickBehaviour: ClickBehaviour {
+        didSet { defaults.set(clickBehaviour.rawValue, forKey: Self.clickBehaviourKey) }
     }
 
-    /// The choice is offered once, the first time a notification is opened.
-    var hasChosenMarkAsReadBehaviour: Bool {
-        didSet { defaults.set(hasChosenMarkAsReadBehaviour, forKey: Self.hasChosenMarkAsReadBehaviourKey) }
+    /// The choice is offered once, right after signing in.
+    var hasChosenClickBehaviour: Bool {
+        didSet { defaults.set(hasChosenClickBehaviour, forKey: Self.hasChosenClickBehaviourKey) }
     }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        marksAsReadOnOpen = defaults.object(forKey: Self.marksAsReadOnOpenKey) as? Bool ?? Self.defaultMarksAsReadOnOpen
-        hasChosenMarkAsReadBehaviour = defaults.bool(forKey: Self.hasChosenMarkAsReadBehaviourKey)
+        clickBehaviour = Self.storedBehaviour(in: defaults) ?? Self.migratedBehaviour(in: defaults) ?? .default
+        hasChosenClickBehaviour = defaults.bool(forKey: Self.hasChosenClickBehaviourKey)
+            || defaults.bool(forKey: Self.retiredHasChosenKey)
+
+        Self.retireOldKeys(in: defaults)
     }
 
-    /// The one-time prompt is left alone: it is a record of a question already
-    /// asked, not a preference, and re-asking it would be a surprise.
     func resetToDefaults() {
-        marksAsReadOnOpen = Self.defaultMarksAsReadOnOpen
+        clickBehaviour = .default
+    }
+
+    private static func storedBehaviour(in defaults: UserDefaults) -> ClickBehaviour? {
+        defaults.string(forKey: clickBehaviourKey).flatMap(ClickBehaviour.init(rawValue:))
+    }
+
+    /// Marking as read on open meant clearing the thread from GitHub as well as
+    /// from here, which is now Read & Dismissed. Leaving it off meant only ever
+    /// marking read by hand, which is closest to Read.
+    private static func migratedBehaviour(in defaults: UserDefaults) -> ClickBehaviour? {
+        guard let marksAsReadOnOpen = defaults.object(forKey: retiredMarksAsReadOnOpenKey) as? Bool else {
+            return nil
+        }
+
+        return marksAsReadOnOpen ? .readAndDismissed : .read
+    }
+
+    private static func retireOldKeys(in defaults: UserDefaults) {
+        defaults.removeObject(forKey: retiredMarksAsReadOnOpenKey)
+        defaults.removeObject(forKey: retiredHasChosenKey)
     }
 }

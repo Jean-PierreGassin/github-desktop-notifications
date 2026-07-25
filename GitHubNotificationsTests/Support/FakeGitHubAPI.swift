@@ -13,7 +13,14 @@ final class FakeGitHubAPI: GitHubAPI, @unchecked Sendable {
         NotificationsResponse(threads: [], isUnchanged: false, lastModified: nil, pollInterval: nil),
     )
 
+    var entireInboxResult: Result<[NotificationThread], GitHubError> = .success([])
+    var markThreadResult: Result<Void, GitHubError> = .success(())
+
     private(set) var fetchCount = 0
+    private(set) var entireInboxFetchCount = 0
+    private(set) var markedAsRead: [String] = []
+    private(set) var markedAsDone: [String] = []
+    private(set) var markedEverythingAsReadCount = 0
 
     func fetchAuthenticatedUser(usingToken token: String) async throws -> AuthenticatedUser {
         try userResult.get()
@@ -25,11 +32,29 @@ final class FakeGitHubAPI: GitHubAPI, @unchecked Sendable {
         return try notificationsResult.get()
     }
 
-    func markThreadAsRead(threadIdentifier: String, usingToken token: String) async throws {}
+    func fetchEntireInbox(usingToken token: String) async throws -> [NotificationThread] {
+        entireInboxFetchCount += 1
 
-    func markThreadAsDone(threadIdentifier: String, usingToken token: String) async throws {}
+        return try entireInboxResult.get()
+    }
 
-    func markEverythingAsRead(usingToken token: String) async throws {}
+    func markThreadAsRead(threadIdentifier: String, usingToken token: String) async throws {
+        markedAsRead.append(threadIdentifier)
+
+        try markThreadResult.get()
+    }
+
+    func markThreadAsDone(threadIdentifier: String, usingToken token: String) async throws {
+        markedAsDone.append(threadIdentifier)
+
+        try markThreadResult.get()
+    }
+
+    func markEverythingAsRead(usingToken token: String) async throws {
+        markedEverythingAsReadCount += 1
+
+        try markThreadResult.get()
+    }
 }
 
 final class InMemoryTokenStorage: TokenStorage, @unchecked Sendable {

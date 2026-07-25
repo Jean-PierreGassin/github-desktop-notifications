@@ -9,6 +9,7 @@ struct InboxPanel: View {
     @Environment(\.openWindow) private var openWindow
 
     @State private var now = Date()
+    @State private var isConfirmingBulkAction = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -18,6 +19,14 @@ struct InboxPanel: View {
 
             if session.notifier.needsPermission {
                 notificationsBlockedWarning
+            }
+
+            if let failure = session.lastActionFailure {
+                WarningBanner(
+                    message: failure,
+                    actionTitle: "Dismiss",
+                    action: session.dismissFailure,
+                )
             }
 
             content
@@ -141,9 +150,11 @@ struct InboxPanel: View {
             ForEach(session.store.visibleGroups) { group in
                 RepositoryGroupView(
                     group: group,
+                    clickBehaviour: session.behaviourPreferences.clickBehaviour,
                     onOpenThread: session.open,
-                    onMarkThreadRead: { thread in Task { await session.markAsRead(thread) } },
-                    onDismissThread: { thread in Task { await session.markAsDone(thread) } },
+                    onApplyToThread: { behaviour, thread in
+                        Task { await session.apply(behaviour, to: thread) }
+                    },
                     onOpenInbox: session.openInbox,
                 )
             }
@@ -177,7 +188,7 @@ struct InboxPanel: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
             if session.auth.isSignedIn {
-                Text(statusSummary)
+                Text(session.bulkProgress ?? statusSummary)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -185,10 +196,7 @@ struct InboxPanel: View {
 
             HStack(spacing: 8) {
                 if session.auth.isSignedIn, session.store.hasNotifications {
-                    Button("Mark all read") {
-                        Task { await session.markEverythingAsRead() }
-                    }
-                    .appButton(.standard)
+                    bulkButton
                 }
 
                 Spacer(minLength: 0)
@@ -196,10 +204,39 @@ struct InboxPanel: View {
                 Button("Quit") {
                     NSApplication.shared.terminate(nil)
                 }
-                .appButton(.destructive)
+                .appButton(.standard)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The bulk action follows the click setting, so it is labelled with it.
+    /// Dismissing is destructive on every device and cannot be undone from here,
+    /// which is what earns both the confirmation and the red.
+    private var bulkButton: some View {
+        let behaviour = session.behaviourPreferences.clickBehaviour
+
+        return Button(behaviour.bulkActionTitle) {
+            guard behaviour.needsBulkConfirmation else {
+                Task { await session.applyToEverything(behaviour) }
+                return
+            }
+
+            isConfirmingBulkAction = true
+        }
+        .appButton(behaviour.needsBulkConfirmation ? .destructive : .standard)
+        .disabled(session.bulkProgress != nil)
+        .confirmationDialog(
+            "\(behaviour.bulkActionTitle)?",
+            isPresented: $isConfirmingBulkAction,
+        ) {
+            Button(behaviour.bulkActionTitle, role: .destructive) {
+                Task { await session.applyToEverything(behaviour) }
+            }
+        } message: {
+            Text("This clears \(session.store.threads.count) notifications from GitHub on every device, "
+                + "and cannot be undone from here.")
+        }
     }
 
     private var statusSummary: String {

@@ -25,7 +25,7 @@ enum NotificationGrouping {
                 return nil
             }
 
-            let orderedThreads = sortByPriorityThenRecency(repositoryThreads)
+            let orderedThreads = sortByReadStateThenPriority(repositoryThreads)
             let visibleThreads = Array(orderedThreads.prefix(max(rowsPerRepository, 1)))
 
             return RepositoryGroup(
@@ -38,14 +38,32 @@ enum NotificationGrouping {
         return sortByMostUrgentThread(groups)
     }
 
-    static func sortByPriorityThenRecency(_ threads: [NotificationThread]) -> [NotificationThread] {
+    /// Read rows sink below unread ones within their repository, then the usual
+    /// priority-then-recency order applies inside each band. Something already
+    /// dealt with should never sit above something that still needs the user.
+    static func sortByReadStateThenPriority(_ threads: [NotificationThread]) -> [NotificationThread] {
         threads.sorted { leading, trailing in
-            guard leading.reason.priorityRank == trailing.reason.priorityRank else {
-                return leading.reason.priorityRank < trailing.reason.priorityRank
+            guard leading.isUnread == trailing.isUnread else {
+                return leading.isUnread
             }
 
-            return leading.updatedAt > trailing.updatedAt
+            return isAheadByPriorityThenRecency(leading, trailing)
         }
+    }
+
+    static func sortByPriorityThenRecency(_ threads: [NotificationThread]) -> [NotificationThread] {
+        threads.sorted(by: isAheadByPriorityThenRecency)
+    }
+
+    private static func isAheadByPriorityThenRecency(
+        _ leading: NotificationThread,
+        _ trailing: NotificationThread,
+    ) -> Bool {
+        guard leading.reason.priorityRank == trailing.reason.priorityRank else {
+            return leading.reason.priorityRank < trailing.reason.priorityRank
+        }
+
+        return leading.updatedAt > trailing.updatedAt
     }
 
     private static func sortByMostUrgentThread(_ groups: [RepositoryGroup]) -> [RepositoryGroup] {

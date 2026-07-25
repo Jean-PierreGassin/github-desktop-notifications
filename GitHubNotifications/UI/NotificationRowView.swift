@@ -3,9 +3,9 @@ import SwiftUI
 
 struct NotificationRowView: View {
     let thread: NotificationThread
+    let clickBehaviour: ClickBehaviour
     let onOpen: () -> Void
-    let onMarkRead: () -> Void
-    let onDismiss: () -> Void
+    let onApply: (ClickBehaviour) -> Void
 
     @State private var isHovering = false
 
@@ -41,9 +41,13 @@ struct NotificationRowView: View {
                 NSPasteboard.general.setString(ThreadURL.derive(for: thread).absoluteString, forType: .string)
             }
 
-            Button("Mark as read", action: onMarkRead)
+            Divider()
 
-            Button("Dismiss", action: onDismiss)
+            // All three stay reachable here, so doing something once never means
+            // changing the setting and changing it back.
+            ForEach(ClickBehaviour.allCases, id: \.self) { behaviour in
+                Button(behaviour.actionTitle) { onApply(behaviour) }
+            }
         }
     }
 
@@ -78,17 +82,13 @@ struct NotificationRowView: View {
         .contentShape(Rectangle())
     }
 
-    /// Opening is the row itself, so these are the two things you cannot do by
-    /// clicking through.
+    /// One button, carrying whatever a click would do, so the button and the row
+    /// can never disagree. The rest of the actions live in the context menu.
     private var actions: some View {
         HStack(spacing: 6) {
-            Button("Mark read", action: onMarkRead)
+            Button(clickBehaviour.actionTitle) { onApply(clickBehaviour) }
                 .appButton(.standard, size: .small)
-                .help("Clear it from here without opening it")
-
-            Button("Dismiss", action: onDismiss)
-                .appButton(.standard, size: .small)
-                .help("Mark it done on GitHub so it leaves your inbox everywhere")
+                .help("Does this without opening it. \(clickBehaviour.explanation)")
 
             Spacer(minLength: 0)
         }

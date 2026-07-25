@@ -66,6 +66,25 @@ extension GitHubClient {
         )
     }
 
+    /// One page is enough: this only decides which locally-held read threads
+    /// still exist, and a thread that has fallen off the first page of the whole
+    /// inbox is long past being shown in the panel.
+    func fetchEntireInbox(usingToken token: String) async throws -> [NotificationThread] {
+        let request = makeRequest(
+            path: "/notifications",
+            token: token,
+            queryItems: [
+                URLQueryItem(name: "all", value: "true"),
+                URLQueryItem(name: "per_page", value: String(Self.threadsPerPage)),
+            ],
+        )
+
+        let (data, response, headers) = try await send(request)
+        try throwIfUnsuccessful(response: response, headers: headers)
+
+        return try decodeThreads(from: data)
+    }
+
     func markThreadAsRead(threadIdentifier: String, usingToken token: String) async throws {
         let request = makeRequest(path: "/notifications/threads/\(threadIdentifier)", token: token, method: "PATCH")
         let (_, response, headers) = try await send(request)

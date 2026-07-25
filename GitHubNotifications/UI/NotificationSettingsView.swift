@@ -6,6 +6,8 @@ struct NotificationSettingsView: View {
     /// above it is on, so subordination is never hand-tuned per site.
     private static let dependentIndent: CGFloat = 20
 
+    private static let highlightDuration: Duration = .seconds(3)
+
     let session: AppSession
 
     /// The preview is pinned below the form rather than placed in it, so it
@@ -21,6 +23,8 @@ struct NotificationSettingsView: View {
                 notificationContent
 
                 behaviour
+
+                clicks
             }
             .formStyle(.grouped)
 
@@ -113,6 +117,48 @@ struct NotificationSettingsView: View {
         }
     }
 
+    /// What a click does lives here rather than on the General tab: it belongs
+    /// with the notifications it acts on, and General is about the app itself.
+    private var clicks: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("When notifications are clicked, mark them as")
+
+                ClickBehaviourPicker(selection: clickBehaviourBinding)
+            }
+            .padding(6)
+            .background(
+                isHighlighted ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.clear),
+                in: RoundedRectangle(cornerRadius: 8),
+            )
+        } header: {
+            SettingsSectionHeader(title: "Clicks") { session.behaviourPreferences.resetToDefaults() }
+        } footer: {
+            Text("The same choice drives the button on a row and the one under the panel, so they never disagree. "
+                + "Any single notification can still be handled another way from its right-click menu.")
+                .foregroundStyle(.secondary)
+        }
+        .task(id: session.highlightedSettingsField == nil) { await fadeOutHighlight() }
+    }
+
+    private var isHighlighted: Bool {
+        session.highlightedSettingsField == .clickBehaviour
+    }
+
+    /// The highlight exists to answer "where did that setting go", so it fades
+    /// once it has been seen rather than staying on the page.
+    private func fadeOutHighlight() async {
+        guard isHighlighted else {
+            return
+        }
+
+        try? await Task.sleep(for: Self.highlightDuration)
+
+        withAnimation(.easeOut(duration: 0.6)) {
+            session.clearSettingsHighlight()
+        }
+    }
+
     /// The preview holds no settings of its own, so it carries no reset.
     private var preview: some View {
         HStack(alignment: .bottom, spacing: 12) {
@@ -181,6 +227,13 @@ struct NotificationSettingsView: View {
                 session.notificationContentPreferences.settings.sound = sound
                 sound.play()
             },
+        )
+    }
+
+    private var clickBehaviourBinding: Binding<ClickBehaviour> {
+        Binding(
+            get: { session.behaviourPreferences.clickBehaviour },
+            set: { session.behaviourPreferences.clickBehaviour = $0 },
         )
     }
 
