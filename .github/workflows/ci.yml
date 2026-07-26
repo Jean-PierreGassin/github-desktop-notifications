@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    # Pinned for the same reason as the release build: a 26.0 deployment target
+    # needs the macOS 26 SDK.
+    runs-on: macos-26
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ad-hoc signed. The signing certificate only matters for a build people
+      # install, and the suite never reads the keychain.
+      - name: Test
+        run: ./scripts/test.sh
