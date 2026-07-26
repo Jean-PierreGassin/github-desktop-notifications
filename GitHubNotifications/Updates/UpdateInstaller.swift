@@ -74,12 +74,45 @@ struct UpdateInstaller: UpdateInstalling {
             let bundleURL = try unarchive(archiveURL, into: workingDirectory)
 
             try CodeSignature.verify(bundleURL: bundleURL)
+            clearQuarantine(on: bundleURL)
 
             return bundleURL
         } catch {
             try? FileManager.default.removeItem(at: workingDirectory)
             throw error
         }
+    }
+
+    /// A path a shell can use.
+    ///
+    /// `URL.path()` percent-encodes by default, and a directory URL's path ends
+    /// in a slash. Both are quietly wrong here: the first looks for a file
+    /// called "GitHub%20Notifications.app", and the second turns a sibling
+    /// backup path into a child of the bundle being backed up.
+    private func shellPath(_ url: URL) -> String {
+        let path = url.path(percentEncoded: false)
+
+        guard path.count > 1, path.hasSuffix("/") else {
+            return path
+        }
+
+        return String(path.dropLast())
+    }
+
+    /// Downloads carry a quarantine flag, and nothing here is notarised, so a
+    /// quarantined replacement would be refused by Gatekeeper on relaunch and
+    /// the update would look like a crash.
+    ///
+    /// This runs only after the bundle has been proved to satisfy the running
+    /// app's designated requirement, which is a stronger statement about it than
+    /// quarantine was making.
+    private func clearQuarantine(on bundleURL: URL) {
+        let xattr = Process()
+        xattr.executableURL = URL(filePath: "/usr/bin/xattr")
+        xattr.arguments = ["-d", "-r", "com.apple.quarantine", shellPath(bundleURL)]
+
+        try? xattr.run()
+        xattr.waitUntilExit()
     }
 
     /// `ditto` rather than `unzip`: it round-trips extended attributes and
@@ -89,7 +122,7 @@ struct UpdateInstaller: UpdateInstalling {
 
         let ditto = Process()
         ditto.executableURL = URL(filePath: "/usr/bin/ditto")
-        ditto.arguments = ["-x", "-k", archiveURL.path(), unpacked.path()]
+        ditto.arguments = ["-x", "-k", shellPath(archiveURL), shellPath(unpacked)]
 
         try? ditto.run()
         ditto.waitUntilExit()
@@ -110,10 +143,11 @@ struct UpdateInstaller: UpdateInstalling {
     /// up with a rename, which is atomic within a volume, and puts it back if
     /// anything goes wrong.
     func install(from bundleURL: URL, relaunching: Bool) throws {
-        let installedPath = installedBundleURL.path()
+        let installedPath = shellPath(installedBundleURL)
+        let containingPath = shellPath(installedBundleURL.deletingLastPathComponent())
 
-        guard FileManager.default.isWritableFile(atPath: installedBundleURL.deletingLastPathComponent().path()) else {
-            throw UpdateFailure.notWritable(installedBundleURL.deletingLastPathComponent().path())
+        guard FileManager.default.isWritableFile(atPath: containingPath) else {
+            throw UpdateFailure.notWritable(containingPath)
         }
 
         let scriptURL = FileManager.default.temporaryDirectory.appending(path: "install-\(UUID().uuidString).sh")
@@ -122,7 +156,7 @@ struct UpdateInstaller: UpdateInstalling {
         let script = """
         #!/bin/bash
         set -u
-        exec >>"\(logURL.path())" 2>&1
+        exec >>"\(shellPath(logURL))" 2>&1
 
         while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done
 
@@ -130,7 +164,7 @@ struct UpdateInstaller: UpdateInstalling {
         rm -rf "$BACKUP"
         mv "\(installedPath)" "$BACKUP" || exit 1
 
-        if ! ditto "\(bundleURL.path())" "\(installedPath)"; then
+        if ! ditto "\(shellPath(bundleURL))" "\(installedPath)"; then
           rm -rf "\(installedPath)"
           mv "$BACKUP" "\(installedPath)"
           exit 1
@@ -142,11 +176,11 @@ struct UpdateInstaller: UpdateInstalling {
 
         do {
             try script.write(to: scriptURL, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path())
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shellPath(scriptURL))
 
             let installation = Process()
             installation.executableURL = URL(filePath: "/bin/bash")
-            installation.arguments = [scriptURL.path()]
+            installation.arguments = [shellPath(scriptURL)]
             try installation.run()
         } catch {
             throw UpdateFailure.swapFailed(error.localizedDescription)

@@ -1,0 +1,63 @@
+name: CodeQL
+
+# Advanced setup rather than default setup. The project uses synchronised
+# folder groups, so `project.pbxproj` lists no individual Swift files, and
+# CodeQL's Swift autobuilder concludes the target has no Swift source at all
+# ("no-swift-target"). Building it ourselves is the documented way out.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 3 * * 1"
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.runner }}
+
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+            runner: ubuntu-latest
+          # Pinned for the same reason as the release build: a 26.0 deployment
+          # target needs the macOS 26 SDK.
+          - language: swift
+            build-mode: manual
+            runner: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # Ad-hoc signed: the signing certificate is only needed for a build people
+      # install, and CodeQL only cares about the compilation.
+      - name: Build
+        if: matrix.build-mode == 'manual'
+        run: ./scripts/build.sh release
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

@@ -11,3 +11,7 @@ xcuserdata/
 
 # macOS
 .DS_Store
+
+# Agentic
+docs/agent-work
+.claude/worktrees
