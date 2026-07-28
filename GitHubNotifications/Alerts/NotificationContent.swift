@@ -20,28 +20,33 @@ struct NotificationContentText: Sendable, Equatable {
 
 /// Builds the text of a notification from the user's choices, never leaving it
 /// blank however much has been switched off.
+///
+/// The middle line is what the announcement is about rather than the thread's
+/// standing reason, so the comment that follows a review request does not arrive
+/// wearing the review request's words.
 enum NotificationContentFormatter {
     private static let fallbackTitle = "GitHub"
 
     static func make(
-        for thread: NotificationThread,
+        for announcement: ThreadAnnouncement,
         settings: NotificationContentSettings,
     ) -> NotificationContentText {
+        let thread = announcement.thread
         let repositoryName = repositoryName(for: thread.repository, settings: settings)
-        let reasonName = thread.reason.displayName
+        let updateSummary = announcement.update.summary(for: thread.reason)
         let threadTitle = thread.subject.title
 
         guard settings.showsThreadTitle else {
             return NotificationContentText(
                 title: repositoryName ?? fallbackTitle,
                 subtitle: "",
-                body: settings.showsNotificationType ? reasonName : threadTitle,
+                body: settings.showsNotificationType ? updateSummary : threadTitle,
             )
         }
 
         return NotificationContentText(
             title: repositoryName ?? fallbackTitle,
-            subtitle: settings.showsNotificationType ? reasonName : "",
+            subtitle: settings.showsNotificationType ? updateSummary : "",
             body: threadTitle,
         )
     }

@@ -83,13 +83,14 @@ struct NotificationSettingsView: View {
 
             Toggle("Show the thread title", isOn: contentBinding(\.showsThreadTitle))
 
-            Toggle("Show why you were notified", isOn: contentBinding(\.showsNotificationType))
+            Toggle("Show what happened", isOn: contentBinding(\.showsNotificationType))
         } header: {
             SettingsSectionHeader(title: "Notification content") {
                 session.notificationContentPreferences.resetContent()
             }
         } footer: {
-            Text("What each notification says when macOS shows it. The menu bar panel is unaffected.")
+            Text("What each notification says when macOS shows it. The first notification about a thread says why it "
+                + "reached you, and the ones after it say what changed. The menu bar panel is unaffected.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -192,7 +193,7 @@ struct NotificationSettingsView: View {
 
     private var previewCard: some View {
         let preview = NotificationContentFormatter.make(
-            for: SampleNotification.thread,
+            for: SampleNotification.announcement,
             settings: session.notificationContentPreferences.settings,
         )
 

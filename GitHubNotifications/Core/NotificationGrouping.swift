@@ -51,8 +51,10 @@ enum NotificationGrouping {
         }
     }
 
-    static func sortByPriorityThenRecency(_ threads: [NotificationThread]) -> [NotificationThread] {
-        threads.sorted(by: isAheadByPriorityThenRecency)
+    /// The order alerts are posted in, so the most urgent thing a poll turned up
+    /// is the one that lands first.
+    static func sortByPriorityThenRecency(_ announcements: [ThreadAnnouncement]) -> [ThreadAnnouncement] {
+        announcements.sorted { isAheadByPriorityThenRecency($0.thread, $1.thread) }
     }
 
     private static func isAheadByPriorityThenRecency(

@@ -250,29 +250,29 @@ final class AppSession {
     /// The ledger is always updated, even when alerts are off, so turning alerts
     /// back on does not replay a backlog.
     private func announceNewThreads(among threads: [NotificationThread]) {
-        let newThreads = ledger.selectThreadsToAnnounce(from: threads)
-        let alertableThreads = newThreads.filter { alertPreferences.allowsAlert(for: $0.reason) }
+        let announcements = ledger.selectThreadsToAnnounce(from: threads)
+        let alertable = announcements.filter { alertPreferences.allowsAlert(for: $0.thread.reason) }
 
-        guard notifier.canPostNotifications, !alertableThreads.isEmpty else {
+        guard notifier.canPostNotifications, !alertable.isEmpty else {
             return
         }
 
         let hours = workHoursPreferences.hours
 
         guard !hours.isEnabled || hours.isWithinHours(Date()) else {
-            heldAlerts.hold(alertableThreads)
-            log.info("Holding \(alertableThreads.count) notifications until your hours start.")
+            heldAlerts.hold(alertable)
+            log.info("Holding \(alertable.count) notifications until your hours start.")
             return
         }
 
-        log.info("Announcing \(alertableThreads.count) new notifications.")
+        log.info("Announcing \(alertable.count) new notifications.")
 
-        Task { await post(alertableThreads) }
+        Task { await post(alertable) }
     }
 
-    private func post(_ threads: [NotificationThread]) async {
-        for thread in NotificationGrouping.sortByPriorityThenRecency(threads) {
-            await notifier.announce(thread, settings: notificationContentPreferences.settings)
+    private func post(_ announcements: [ThreadAnnouncement]) async {
+        for announcement in NotificationGrouping.sortByPriorityThenRecency(announcements) {
+            await notifier.announce(announcement, settings: notificationContentPreferences.settings)
         }
     }
 

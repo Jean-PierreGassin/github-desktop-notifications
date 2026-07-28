@@ -141,7 +141,7 @@ struct WorkHoursView: View {
 
             if !session.heldAlerts.isEmpty {
                 LabeledContent("Waiting") {
-                    Text("\(session.heldAlerts.heldThreads.count) notifications")
+                    Text("\(session.heldAlerts.heldAnnouncements.count) notifications")
                         .foregroundStyle(.secondary)
                 }
             }

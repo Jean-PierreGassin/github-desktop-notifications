@@ -7,6 +7,8 @@ import Testing
 struct SeenThreadLedgerTests {
     private let firstUpdate = Date(timeIntervalSince1970: 1_700_000_000)
     private let secondUpdate = Date(timeIntervalSince1970: 1_700_000_600)
+    private let firstComment = "https://api.github.com/repos/acme/api/issues/comments/1"
+    private let secondComment = "https://api.github.com/repos/acme/api/issues/comments/2"
 
     @Test
     func announcesNothingOnTheFirstFetchAfterSigningIn() {
@@ -56,6 +58,74 @@ struct SeenThreadLedgerTests {
     }
 
     @Test
+    func leadsWithTheReasonTheFirstTimeAThreadIsAnnounced() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", reason: .reviewRequested)])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    /// The point of the change: a thread the user has already been told about
+    /// must not arrive a second time wearing the same words.
+    @Test
+    func saysWhatChangedWhenAThreadIsAnnouncedAgain() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment),
+        ])
+
+        #expect(announced.map(\.update) == [.comment])
+    }
+
+    /// GitHub sends the newest comment whether or not a comment is what moved,
+    /// so an unchanged one means the update was something else.
+    @Test
+    func fallsBackToActivityWhenTheThreadMovesWithoutANewComment() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: firstComment),
+        ])
+
+        #expect(announced.map(\.update) == [.otherActivity])
+    }
+
+    /// A thread that now concerns the user more directly leads with the new
+    /// reason, because that is the news rather than the comment carrying it.
+    @Test
+    func leadsWithTheReasonAgainWhenGitHubChangesIt() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", reason: .subscribed)])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            Fixtures.thread(id: "a", reason: .mentioned, updatedAt: secondUpdate, latestCommentAPIURL: secondComment),
+        ])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    /// A ledger from a version that recorded only dates has to keep working, or
+    /// the first run after updating re-seeds and swallows a poll's alerts.
+    @Test
+    func readsALedgerWrittenBeforeUpdatesWereRecorded() throws {
+        let fileURL = temporaryFileURL()
+        try #"{"hasBeenSeeded":true,"lastAnnouncedUpdates":{"a":"2023-11-14T22:13:20Z"}}"#
+            .write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let ledger = makeLedger(fileURL: fileURL)
+        let unchanged = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: firstUpdate)])
+        let updated = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: secondUpdate)])
+
+        #expect(unchanged.isEmpty)
+        #expect(updated.map(\.update) == [.reasonForNotifying])
+    }
+
+    @Test
     func survivesARestart() {
         let fileURL = temporaryFileURL()
         let firstRun = makeLedger(fileURL: fileURL)
@@ -77,6 +147,17 @@ struct SeenThreadLedgerTests {
 
         #expect(ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a")]).isEmpty)
         #expect(ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "b")]).map(\.id) == ["b"])
+    }
+
+    /// The thread the complaint is about: one pull request whose reason never
+    /// moves, however much happens on it.
+    private func reviewRequest(updatedAt: Date? = nil, commentAPIURL: String) -> NotificationThread {
+        Fixtures.thread(
+            id: "a",
+            reason: .reviewRequested,
+            updatedAt: updatedAt ?? firstUpdate,
+            latestCommentAPIURL: commentAPIURL,
+        )
     }
 
     private func makeLedger(fileURL: URL? = nil) -> SeenThreadLedger {
