@@ -7,6 +7,7 @@ struct RepositoryGroupView: View {
     let latestUpdates: [String: ThreadUpdate]
     let clickBehaviour: ClickBehaviour
     let avatars: AvatarCache
+    let subjectStatuses: SubjectStatusCache
     let showsDivider: Bool
     let onOpenThread: (NotificationThread) -> Void
     let onApplyToThread: (ClickBehaviour, NotificationThread) -> Void
@@ -25,6 +26,7 @@ struct RepositoryGroupView: View {
                 NotificationRowView(
                     thread: thread,
                     update: latestUpdates[thread.id],
+                    status: subjectStatuses.status(for: thread),
                     clickBehaviour: clickBehaviour,
                     onOpen: { onOpenThread(thread) },
                     onApply: { behaviour in onApplyToThread(behaviour, thread) },

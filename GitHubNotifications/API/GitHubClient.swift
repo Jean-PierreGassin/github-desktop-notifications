@@ -28,6 +28,12 @@ protocol GitHubAPI: Sendable {
 
     /// - Throws: ``GitHubError`` when GitHub rejects the request or the network fails.
     func markEverythingAsRead(usingToken token: String) async throws
+
+    /// Reads where a notification's pull request or issue currently stands, from
+    /// the subject URL GitHub hands out with the thread.
+    ///
+    /// - Throws: ``GitHubError`` when GitHub rejects the request or the network fails.
+    func fetchSubjectStatus(at subjectURL: URL, usingToken token: String) async throws -> SubjectStatus
 }
 
 struct GitHubClient: GitHubAPI {

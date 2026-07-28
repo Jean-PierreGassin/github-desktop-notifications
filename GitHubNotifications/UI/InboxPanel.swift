@@ -159,6 +159,7 @@ struct InboxPanel: View {
                     latestUpdates: session.store.latestUpdates,
                     clickBehaviour: session.behaviourPreferences.clickBehaviour,
                     avatars: session.avatars,
+                    subjectStatuses: session.subjectStatuses,
                     showsDivider: index > 0,
                     onOpenThread: session.open,
                     onApplyToThread: { behaviour, thread in

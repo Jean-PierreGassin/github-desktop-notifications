@@ -30,12 +30,12 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 
 - **Real desktop notifications**, delivered by macOS, so Notification Centre, your sounds and your Focus rules all apply
   (on top of in-app customisation).
-- **Each notification says what changed**, so the comment on a pull request you were asked to review arrives as a
-  comment, rather than as a repeat of the review request. Rows carry both: why the thread reached you, and what last
-  happened in it.
-- **A long-running thread stops shouting.** Once you have been told about a pull request, you choose how much of what
-  follows is worth an interruption: everything, only new comments, or nothing else. Pushes and green ticks stop earning
-  a banner each, and you still get told the moment GitHub decides the thread concerns you more directly.
+- **Each notification says what changed**, so a comment on a pull request you were asked to review arrives as a comment,
+  not as another copy of the review request. Rows show both.
+- **You pick how much follow-up is worth interrupting you**: everything, only new comments, or nothing after the first
+  one. Pushes and CI runs stop getting a banner each, and you still get told when GitHub changes why a thread concerns
+  you.
+- **Rows show merged, closed and draft**, so you know a pull request is already done without opening it.
 - **Grouped by repository and ordered by urgency**, so review requests and mentions sit above other noise.
 - **Fifteen notification types you can switch individually**, or set presets if you would rather not.
 - **Work hours**, holding notifications outside your hours and delivering them together when your next working day
@@ -100,6 +100,10 @@ previous `Last-Modified`, receive `304 Not Modified` when nothing has changed, a
 
 This app does exactly that. Notifications arrive within about a minute, and an idle inbox consumes effectively none of
 your 5,000 requests per hour.
+
+The inbox doesn't say whether a pull request is merged, closed or a draft, so reading that costs one request each. It
+only happens for rows you can actually see, and only when the thread changes, so it's a handful of requests when you
+open the panel rather than one per notification.
 
 ## Security
 

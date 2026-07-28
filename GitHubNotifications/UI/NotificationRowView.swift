@@ -9,6 +9,7 @@ struct NotificationRowView: View {
 
     let thread: NotificationThread
     let update: ThreadUpdate?
+    let status: SubjectStatus?
     let clickBehaviour: ClickBehaviour
     let onOpen: () -> Void
     let onApply: (ClickBehaviour) -> Void
@@ -93,6 +94,15 @@ struct NotificationRowView: View {
 
             Spacer(minLength: 4)
 
+            if let status, status.isWorthShowing {
+                Image(systemName: status.symbolName)
+                    .imageScale(.small)
+                    .foregroundStyle(statusTint(for: status))
+                    .help(status.displayName)
+                    .alignmentGuide(.firstTextBaseline) { dimensions in dimensions[VerticalAlignment.center] + 2 }
+                    .transition(.opacity)
+            }
+
             if thread.isUnread {
                 Circle()
                     .fill(.tint)
@@ -100,6 +110,7 @@ struct NotificationRowView: View {
                     .alignmentGuide(.firstTextBaseline) { dimensions in dimensions[VerticalAlignment.center] + 2 }
             }
         }
+        .animation(.easeOut(duration: 0.2), value: status)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -113,6 +124,17 @@ struct NotificationRowView: View {
             Button(rowBehaviour.actionTitle) { onApply(rowBehaviour) }
                 .appButton(.standard, size: .small)
                 .help("Does this without opening it. \(rowBehaviour.explanation)")
+        }
+    }
+
+    /// GitHub's own colours, because they are the ones people already read
+    /// without being told: purple once it is merged, red once it is closed. A
+    /// draft is not an outcome, so it stays as quiet as the caption beside it.
+    private func statusTint(for status: SubjectStatus) -> AnyShapeStyle {
+        switch status {
+        case .merged: AnyShapeStyle(.purple)
+        case .closed: AnyShapeStyle(.red)
+        case .open, .draft: AnyShapeStyle(.secondary)
         }
     }
 
@@ -134,11 +156,13 @@ struct NotificationRowView: View {
         let updatedDescription = thread.updatedAt.formatted(date: .abbreviated, time: .shortened)
         let visibility = thread.repository.isPrivate ? " (private)" : ""
 
+        let standing = status.map { "\n\($0.displayName)" } ?? ""
+
         return """
         \(thread.repository.fullName)\(visibility)
         \(caption)
 
-        \(thread.subject.title)
+        \(thread.subject.title)\(standing)
 
         Updated \(updatedDescription)
         """

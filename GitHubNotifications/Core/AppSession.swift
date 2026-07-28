@@ -19,6 +19,7 @@ final class AppSession {
     let heldAlerts: HeldAlertQueue
     let launchAtLogin: LaunchAtLogin
     let avatars: AvatarCache
+    let subjectStatuses: SubjectStatusCache
     let updatePreferences: UpdatePreferences
     let updates: UpdateChecker
 
@@ -92,6 +93,7 @@ final class AppSession {
         launchAtLogin = LaunchAtLogin(log: log)
         ledger = SeenThreadLedger(fileURL: supportDirectory?.appending(path: "seen-threads.json"), log: log)
         avatars = AvatarCache(directory: supportDirectory?.appending(path: "avatars"), log: log)
+        subjectStatuses = SubjectStatusCache(api: api, auth: auth, log: log)
         updatePreferences = UpdatePreferences(defaults: defaults)
         updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
@@ -356,6 +358,7 @@ final class AppSession {
         store.removeAll()
         ledger.clear()
         heldAlerts.clear()
+        subjectStatuses.clear()
         auth.signOut()
     }
 
