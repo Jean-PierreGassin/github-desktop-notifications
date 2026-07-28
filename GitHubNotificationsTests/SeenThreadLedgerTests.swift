@@ -139,16 +139,23 @@ struct SeenThreadLedgerTests {
     /// the first run after updating re-seeds and swallows a poll's alerts.
     @Test
     func readsALedgerWrittenBeforeUpdatesWereRecorded() throws {
-        let fileURL = temporaryFileURL()
-        try #"{"hasBeenSeeded":true,"lastAnnouncedUpdates":{"a":"2023-11-14T22:13:20Z"}}"#
-            .write(to: fileURL, atomically: true, encoding: .utf8)
+        let ledger = try makeLedgerCarriedOverFromDatesOnly()
 
-        let ledger = makeLedger(fileURL: fileURL)
-        let unchanged = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: firstUpdate)])
-        let updated = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: secondUpdate)])
+        let announced = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: firstUpdate)])
 
-        #expect(unchanged.isEmpty)
-        #expect(updated.map(\.update) == [.reasonForNotifying])
+        #expect(announced.isEmpty)
+    }
+
+    /// A carried-over thread has no recorded reason to compare against, so the
+    /// first thing said about it is why it is in the inbox, the same as a thread
+    /// being announced for the first time.
+    @Test
+    func leadsWithTheReasonForAThreadCarriedOverFromADatesOnlyLedger() throws {
+        let ledger = try makeLedgerCarriedOverFromDatesOnly()
+
+        let announced = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: secondUpdate)])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
     }
 
     @Test
@@ -184,6 +191,17 @@ struct SeenThreadLedgerTests {
             updatedAt: updatedAt ?? firstUpdate,
             latestCommentAPIURL: commentAPIURL,
         )
+    }
+
+    /// A seeded ledger written by a version that held a bare date per thread,
+    /// with thread "a" last announced at ``firstUpdate``.
+    private func makeLedgerCarriedOverFromDatesOnly() throws -> SeenThreadLedger {
+        let fileURL = temporaryFileURL()
+
+        try #"{"hasBeenSeeded":true,"lastAnnouncedUpdates":{"a":"2023-11-14T22:13:20Z"}}"#
+            .write(to: fileURL, atomically: true, encoding: .utf8)
+
+        return makeLedger(fileURL: fileURL)
     }
 
     private func makeLedger(fileURL: URL? = nil) -> SeenThreadLedger {
