@@ -23,7 +23,7 @@ final class AppSession {
     let updatePreferences: UpdatePreferences
     let updates: UpdateChecker
 
-    static let defaultRowsPerRepository = 5
+    static let defaultRowsPerRepository = 10
 
     /// Read rows count against this limit as well as unread ones, so it is lower
     /// than it was: ten rows of one repository is already a wall of text.
