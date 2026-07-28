@@ -41,6 +41,31 @@ enum ThreadUpdate: String, Sendable, Codable {
         changeDescription ?? reason.displayName
     }
 
+    /// What changed, for a panel row that is already showing `reason` next to
+    /// it, or nothing when the reason has said it.
+    ///
+    /// A row prints the two together, so a pairing that restates itself reads as
+    /// a bug rather than as detail: "New comment on a thread · New comment".
+    func changeDescription(alongside reason: NotificationReason) -> String? {
+        guard !reasonsThatAlreadySayIt.contains(reason) else {
+            return nil
+        }
+
+        return changeDescription
+    }
+
+    /// Reasons whose own wording already covers this change. Kept narrow on
+    /// purpose: only where the row would say the same thing twice, not merely
+    /// where the two are related. A diff comment on a thread you are following
+    /// for its comments is still worth the distinction.
+    private var reasonsThatAlreadySayIt: Set<NotificationReason> {
+        switch self {
+        case .comment: [.comment]
+        case .otherActivity: [.unrecognised]
+        case .reasonForNotifying, .reviewComment: []
+        }
+    }
+
     /// GitHub names no event, so the kind of comment is read from the shape of
     /// the URL it gives for the newest one, the same way ``ThreadURL`` reads it
     /// for the anchor. A URL that points at anything other than a comment, which

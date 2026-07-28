@@ -39,4 +39,27 @@ struct ThreadUpdateTests {
 
         #expect(summary == NotificationReason.reviewRequested.displayName)
     }
+
+    /// A row prints the reason and the change side by side, so a pairing that
+    /// restates itself reads as the row being broken.
+    @Test(arguments: [
+        (ThreadUpdate.comment, NotificationReason.comment),
+        (.otherActivity, .unrecognised),
+    ])
+    func addsNothingToARowWhoseReasonAlreadySaysIt(update: ThreadUpdate, reason: NotificationReason) {
+        #expect(update.changeDescription(alongside: reason) == nil)
+    }
+
+    @Test(arguments: [
+        (ThreadUpdate.comment, NotificationReason.reviewRequested, "New comment"),
+        (.reviewComment, .comment, "New comment on the diff"),
+        (.otherActivity, .reviewRequested, "New activity"),
+    ])
+    func stillSaysWhatChangedWhereTheReasonDoesNotCoverIt(
+        update: ThreadUpdate,
+        reason: NotificationReason,
+        expected: String,
+    ) {
+        #expect(update.changeDescription(alongside: reason) == expected)
+    }
 }

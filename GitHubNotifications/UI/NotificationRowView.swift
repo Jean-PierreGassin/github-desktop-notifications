@@ -122,7 +122,7 @@ struct NotificationRowView: View {
     /// review request, and a row reading the same as it did yesterday is a row
     /// worth ignoring.
     private var caption: String {
-        guard let change = update?.changeDescription else {
+        guard let change = update?.changeDescription(alongside: thread.reason) else {
             return thread.reason.displayName
         }
 
