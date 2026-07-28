@@ -7,6 +7,8 @@ import Testing
 struct SeenThreadLedgerTests {
     private let firstUpdate = Date(timeIntervalSince1970: 1_700_000_000)
     private let secondUpdate = Date(timeIntervalSince1970: 1_700_000_600)
+    private let firstComment = "https://api.github.com/repos/acme/api/issues/comments/1"
+    private let secondComment = "https://api.github.com/repos/acme/api/issues/comments/2"
 
     @Test
     func announcesNothingOnTheFirstFetchAfterSigningIn() {
@@ -56,6 +58,107 @@ struct SeenThreadLedgerTests {
     }
 
     @Test
+    func leadsWithTheReasonTheFirstTimeAThreadIsAnnounced() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", reason: .reviewRequested)])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    /// The point of the change: a thread the user has already been told about
+    /// must not arrive a second time wearing the same words.
+    @Test
+    func saysWhatChangedWhenAThreadIsAnnouncedAgain() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment),
+        ])
+
+        #expect(announced.map(\.update) == [.comment])
+    }
+
+    /// GitHub sends the newest comment whether or not a comment is what moved,
+    /// so an unchanged one means the update was something else.
+    @Test
+    func fallsBackToActivityWhenTheThreadMovesWithoutANewComment() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: firstComment),
+        ])
+
+        #expect(announced.map(\.update) == [.otherActivity])
+    }
+
+    /// A thread that now concerns the user more directly leads with the new
+    /// reason, because that is the news rather than the comment carrying it.
+    @Test
+    func leadsWithTheReasonAgainWhenGitHubChangesIt() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", reason: .subscribed)])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            Fixtures.thread(id: "a", reason: .mentioned, updatedAt: secondUpdate, latestCommentAPIURL: secondComment),
+        ])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    @Test
+    func recordsTheLatestChangeAgainstEachThreadForThePanel() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        _ = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment),
+        ])
+
+        #expect(ledger.latestUpdates == ["a": .comment])
+    }
+
+    /// Most polls change nothing, and a row must not lose what it says every
+    /// time the inbox is read back unchanged.
+    @Test
+    func keepsShowingTheLatestChangeWhileNothingMoves() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+        let commented = reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment)
+        _ = ledger.selectThreadsToAnnounce(from: [commented])
+
+        _ = ledger.selectThreadsToAnnounce(from: [commented])
+
+        #expect(ledger.latestUpdates == ["a": .comment])
+    }
+
+    /// A ledger from a version that recorded only dates has to keep working, or
+    /// the first run after updating re-seeds and swallows a poll's alerts.
+    @Test
+    func readsALedgerWrittenBeforeUpdatesWereRecorded() throws {
+        let ledger = try makeLedgerCarriedOverFromDatesOnly()
+
+        let announced = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: firstUpdate)])
+
+        #expect(announced.isEmpty)
+    }
+
+    /// A carried-over thread has no recorded reason to compare against, so the
+    /// first thing said about it is why it is in the inbox, the same as a thread
+    /// being announced for the first time.
+    @Test
+    func leadsWithTheReasonForAThreadCarriedOverFromADatesOnlyLedger() throws {
+        let ledger = try makeLedgerCarriedOverFromDatesOnly()
+
+        let announced = ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a", updatedAt: secondUpdate)])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    @Test
     func survivesARestart() {
         let fileURL = temporaryFileURL()
         let firstRun = makeLedger(fileURL: fileURL)
@@ -77,6 +180,28 @@ struct SeenThreadLedgerTests {
 
         #expect(ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "a")]).isEmpty)
         #expect(ledger.selectThreadsToAnnounce(from: [Fixtures.thread(id: "b")]).map(\.id) == ["b"])
+    }
+
+    /// The thread the complaint is about: one pull request whose reason never
+    /// moves, however much happens on it.
+    private func reviewRequest(updatedAt: Date? = nil, commentAPIURL: String) -> NotificationThread {
+        Fixtures.thread(
+            id: "a",
+            reason: .reviewRequested,
+            updatedAt: updatedAt ?? firstUpdate,
+            latestCommentAPIURL: commentAPIURL,
+        )
+    }
+
+    /// A seeded ledger written by a version that held a bare date per thread,
+    /// with thread "a" last announced at ``firstUpdate``.
+    private func makeLedgerCarriedOverFromDatesOnly() throws -> SeenThreadLedger {
+        let fileURL = temporaryFileURL()
+
+        try #"{"hasBeenSeeded":true,"lastAnnouncedUpdates":{"a":"2023-11-14T22:13:20Z"}}"#
+            .write(to: fileURL, atomically: true, encoding: .utf8)
+
+        return makeLedger(fileURL: fileURL)
     }
 
     private func makeLedger(fileURL: URL? = nil) -> SeenThreadLedger {

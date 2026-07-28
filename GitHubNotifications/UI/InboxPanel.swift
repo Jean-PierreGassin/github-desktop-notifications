@@ -156,8 +156,10 @@ struct InboxPanel: View {
             ForEach(Array(session.store.groups.enumerated()), id: \.element.id) { index, group in
                 RepositoryGroupView(
                     group: group,
+                    latestUpdates: session.store.latestUpdates,
                     clickBehaviour: session.behaviourPreferences.clickBehaviour,
                     avatars: session.avatars,
+                    subjectStatuses: session.subjectStatuses,
                     showsDivider: index > 0,
                     onOpenThread: session.open,
                     onApplyToThread: { behaviour, thread in
@@ -165,8 +167,13 @@ struct InboxPanel: View {
                     },
                     onOpenInbox: session.openInbox,
                 )
+                .transition(.opacity)
             }
         }
+        // Dismissing the last row of a repository takes its heading with it, so
+        // the group leaves on the same beat as the row rather than snapping shut
+        // once the row has already gone.
+        .animation(.easeInOut(duration: RepositoryGroupView.removalDuration), value: session.store.groups.map(\.id))
         .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { height in
             listHeight = height
         }

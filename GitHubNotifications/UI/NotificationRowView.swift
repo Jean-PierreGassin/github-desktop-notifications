@@ -8,6 +8,8 @@ struct NotificationRowView: View {
     private static let unreadDotSide: CGFloat = 7
 
     let thread: NotificationThread
+    let update: ThreadUpdate?
+    let status: SubjectStatus?
     let clickBehaviour: ClickBehaviour
     let onOpen: () -> Void
     let onApply: (ClickBehaviour) -> Void
@@ -83,12 +85,23 @@ struct NotificationRowView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
 
-                Text(thread.reason.displayName)
+                Text(caption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Spacer(minLength: 4)
+
+            if let status, status.isWorthShowing {
+                Image(systemName: status.symbolName)
+                    .imageScale(.small)
+                    .foregroundStyle(statusTint(for: status))
+                    .help(status.displayName)
+                    .alignmentGuide(.firstTextBaseline) { dimensions in dimensions[VerticalAlignment.center] + 2 }
+                    .transition(.opacity)
+            }
 
             if thread.isUnread {
                 Circle()
@@ -97,6 +110,7 @@ struct NotificationRowView: View {
                     .alignmentGuide(.firstTextBaseline) { dimensions in dimensions[VerticalAlignment.center] + 2 }
             }
         }
+        .animation(.easeOut(duration: 0.2), value: status)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -113,16 +127,42 @@ struct NotificationRowView: View {
         }
     }
 
+    /// GitHub's own colours, because they are the ones people already read
+    /// without being told: purple once it is merged, red once it is closed. A
+    /// draft is not an outcome, so it stays as quiet as the caption beside it.
+    private func statusTint(for status: SubjectStatus) -> AnyShapeStyle {
+        switch status {
+        case .merged: AnyShapeStyle(.purple)
+        case .closed: AnyShapeStyle(.red)
+        case .open, .draft: AnyShapeStyle(.secondary)
+        }
+    }
+
+    /// Why the thread is in the inbox, and what last happened in it. The reason
+    /// alone stops saying anything once a thread has been running a while: every
+    /// comment and review on a pull request you were asked to review is still a
+    /// review request, and a row reading the same as it did yesterday is a row
+    /// worth ignoring.
+    private var caption: String {
+        guard let change = update?.changeDescription(alongside: thread.reason) else {
+            return thread.reason.displayName
+        }
+
+        return "\(thread.reason.displayName) · \(change)"
+    }
+
     /// The row truncates, so the tooltip carries everything in full.
     private var hoverDescription: String {
         let updatedDescription = thread.updatedAt.formatted(date: .abbreviated, time: .shortened)
         let visibility = thread.repository.isPrivate ? " (private)" : ""
 
+        let standing = status.map { "\n\($0.displayName)" } ?? ""
+
         return """
         \(thread.repository.fullName)\(visibility)
-        \(thread.reason.displayName)
+        \(caption)
 
-        \(thread.subject.title)
+        \(thread.subject.title)\(standing)
 
         Updated \(updatedDescription)
         """

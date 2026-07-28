@@ -23,4 +23,11 @@ enum SampleNotification {
             owner: RepositoryOwner(login: "your-org", avatarURL: nil),
         ),
     )
+
+    /// Shown as a thread the user is hearing about for the first time, which is
+    /// what a review request arrives as.
+    static let announcement = ThreadAnnouncement(
+        thread: SampleNotification.thread,
+        update: .reasonForNotifying,
+    )
 }

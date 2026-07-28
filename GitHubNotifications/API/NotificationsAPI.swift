@@ -106,6 +106,21 @@ extension GitHubClient {
         try throwIfUnsuccessful(response: response, headers: headers)
     }
 
+    /// The subject URL is GitHub's own, taken from a thread rather than built
+    /// here, so it is sent as given.
+    func fetchSubjectStatus(at subjectURL: URL, usingToken token: String) async throws -> SubjectStatus {
+        let request = makeRequest(url: subjectURL, token: token)
+        let (data, response, headers) = try await send(request)
+
+        try throwIfUnsuccessful(response: response, headers: headers)
+
+        guard let status = try? JSONDecoder().decode(SubjectStatusResponse.self, from: data) else {
+            throw GitHubError.malformedResponse
+        }
+
+        return status.status
+    }
+
     /// - Throws: ``GitHubError/malformedResponse`` when the payload does not decode.
     private func decodeThreads(from data: Data) throws -> [NotificationThread] {
         let decoder = JSONDecoder()

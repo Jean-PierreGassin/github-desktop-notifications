@@ -30,9 +30,10 @@ final class Notifier: NSObject, @preconcurrency UNUserNotificationCenterDelegate
     }
 
     /// Raises one alert per thread, grouped in Notification Centre by repository.
-    func announce(_ thread: NotificationThread, settings: NotificationContentSettings) async {
+    func announce(_ announcement: ThreadAnnouncement, settings: NotificationContentSettings) async {
+        let thread = announcement.thread
         let content = makeContent(
-            NotificationContentFormatter.make(for: thread, settings: settings),
+            NotificationContentFormatter.make(for: announcement, settings: settings),
             settings: settings,
         )
         content.threadIdentifier = settings.groupsByRepository ? thread.repository.fullName : ""
@@ -143,7 +144,7 @@ final class Notifier: NSObject, @preconcurrency UNUserNotificationCenterDelegate
     /// Sends a sample alert formatted exactly as a real one would be, so the
     /// user can confirm both permission and layout in one click.
     func sendTestNotification(settings: NotificationContentSettings) async {
-        let text = NotificationContentFormatter.make(for: SampleNotification.thread, settings: settings)
+        let text = NotificationContentFormatter.make(for: SampleNotification.announcement, settings: settings)
 
         await post(makeContent(text, settings: settings), identifier: "test-\(UUID().uuidString)")
     }

@@ -33,6 +33,9 @@ struct NotificationSettingsView: View {
         .font(.callout)
     }
 
+    /// Two pickers because there are two decisions, and reason alone cannot make
+    /// the second: which threads are allowed to interrupt, and how much of what
+    /// happens on them afterwards is worth interrupting for.
     private var alerts: some View {
         Section {
             Picker("Notify me about", selection: presetBinding) {
@@ -40,11 +43,19 @@ struct NotificationSettingsView: View {
                     Text(preset.displayName).tag(preset)
                 }
             }
+
+            Picker("After the first alert", selection: followUpBinding) {
+                ForEach(FollowUpAlerts.allCases, id: \.self) { followUp in
+                    Text(followUp.displayName).tag(followUp)
+                }
+            }
         } header: {
             SettingsSectionHeader(title: "Alerts") { session.alertPreferences.resetToDefaults() }
         } footer: {
-            Text("\(session.alertPreferences.preset.summary) Everything reaches the menu bar panel either way. "
-                + "Reset restores the preset and the types below with it.")
+            Text("\(session.alertPreferences.preset.summary) "
+                + "\(session.alertPreferences.followUpAlerts.summary) "
+                + "Everything still reaches the menu bar panel, which says what last happened. "
+                + "Reset restores both, and the types below with them.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -83,13 +94,14 @@ struct NotificationSettingsView: View {
 
             Toggle("Show the thread title", isOn: contentBinding(\.showsThreadTitle))
 
-            Toggle("Show why you were notified", isOn: contentBinding(\.showsNotificationType))
+            Toggle("Show what happened", isOn: contentBinding(\.showsNotificationType))
         } header: {
             SettingsSectionHeader(title: "Notification content") {
                 session.notificationContentPreferences.resetContent()
             }
         } footer: {
-            Text("What each notification says when macOS shows it. The menu bar panel is unaffected.")
+            Text("What each notification says when macOS shows it. The first notification about a thread says why it "
+                + "reached you, and the ones after it say what changed. The menu bar panel is unaffected.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -192,7 +204,7 @@ struct NotificationSettingsView: View {
 
     private var previewCard: some View {
         let preview = NotificationContentFormatter.make(
-            for: SampleNotification.thread,
+            for: SampleNotification.announcement,
             settings: session.notificationContentPreferences.settings,
         )
 
@@ -245,6 +257,13 @@ struct NotificationSettingsView: View {
         Binding(
             get: { session.alertPreferences.preset },
             set: { session.alertPreferences.select($0) },
+        )
+    }
+
+    private var followUpBinding: Binding<FollowUpAlerts> {
+        Binding(
+            get: { session.alertPreferences.followUpAlerts },
+            set: { session.alertPreferences.followUpAlerts = $0 },
         )
     }
 

@@ -19,10 +19,11 @@ final class AppSession {
     let heldAlerts: HeldAlertQueue
     let launchAtLogin: LaunchAtLogin
     let avatars: AvatarCache
+    let subjectStatuses: SubjectStatusCache
     let updatePreferences: UpdatePreferences
     let updates: UpdateChecker
 
-    static let defaultRowsPerRepository = 5
+    static let defaultRowsPerRepository = 10
 
     /// Read rows count against this limit as well as unread ones, so it is lower
     /// than it was: ten rows of one repository is already a wall of text.
@@ -88,10 +89,11 @@ final class AppSession {
         notificationContentPreferences = NotificationContentPreferences(defaults: defaults)
         workHoursPreferences = WorkHoursPreferences(defaults: defaults)
         behaviourPreferences = BehaviourPreferences(defaults: defaults)
-        heldAlerts = HeldAlertQueue(log: log)
+        heldAlerts = HeldAlertQueue(fileURL: supportDirectory?.appending(path: "held-alerts.json"), log: log)
         launchAtLogin = LaunchAtLogin(log: log)
         ledger = SeenThreadLedger(fileURL: supportDirectory?.appending(path: "seen-threads.json"), log: log)
         avatars = AvatarCache(directory: supportDirectory?.appending(path: "avatars"), log: log)
+        subjectStatuses = SubjectStatusCache(api: api, auth: auth, log: log)
         updatePreferences = UpdatePreferences(defaults: defaults)
         updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
@@ -239,7 +241,7 @@ final class AppSession {
 
     private func connectAlerts() {
         poller.onThreadsFetched = { [weak self] threads in
-            self?.announceNewThreads(among: threads)
+            self?.handleFetchedThreads(threads)
         }
 
         notifier.onAlertClicked = { [weak self] threadIdentifier in
@@ -249,30 +251,50 @@ final class AppSession {
 
     /// The ledger is always updated, even when alerts are off, so turning alerts
     /// back on does not replay a backlog.
-    private func announceNewThreads(among threads: [NotificationThread]) {
-        let newThreads = ledger.selectThreadsToAnnounce(from: threads)
-        let alertableThreads = newThreads.filter { alertPreferences.allowsAlert(for: $0.reason) }
+    ///
+    /// What last changed reaches the panel whether or not it is worth an alert.
+    /// A row that says what happened is the answer to an alert missed, held or
+    /// never asked for, and it is why a busy thread does not need a banner per
+    /// event to stay legible.
+    private func handleFetchedThreads(_ threads: [NotificationThread]) {
+        let announcements = ledger.selectThreadsToAnnounce(from: threads)
 
-        guard notifier.canPostNotifications, !alertableThreads.isEmpty else {
+        store.showLatestUpdates(ledger.latestUpdates)
+        announce(announcements)
+    }
+
+    private func announce(_ announcements: [ThreadAnnouncement]) {
+        let alertable = announcements.filter(isWorthInterruptingFor)
+
+        guard notifier.canPostNotifications, !alertable.isEmpty else {
             return
         }
 
         let hours = workHoursPreferences.hours
 
         guard !hours.isEnabled || hours.isWithinHours(Date()) else {
-            heldAlerts.hold(alertableThreads)
-            log.info("Holding \(alertableThreads.count) notifications until your hours start.")
+            heldAlerts.hold(alertable)
+            log.info("Holding \(alertable.count) notifications until your hours start.")
             return
         }
 
-        log.info("Announcing \(alertableThreads.count) new notifications.")
+        log.info("Announcing \(alertable.count) new notifications.")
 
-        Task { await post(alertableThreads) }
+        Task { await post(alertable) }
     }
 
-    private func post(_ threads: [NotificationThread]) async {
-        for thread in NotificationGrouping.sortByPriorityThenRecency(threads) {
-            await notifier.announce(thread, settings: notificationContentPreferences.settings)
+    /// Two questions rather than one: whether this kind of thread may interrupt
+    /// at all, and whether this particular change to it has earned an alert of
+    /// its own. The second is what keeps a pull request from alerting on every
+    /// push and green tick for as long as it is open.
+    private func isWorthInterruptingFor(_ announcement: ThreadAnnouncement) -> Bool {
+        alertPreferences.allowsAlert(for: announcement.thread.reason)
+            && alertPreferences.allowsAlert(about: announcement.update)
+    }
+
+    private func post(_ announcements: [ThreadAnnouncement]) async {
+        for announcement in NotificationGrouping.sortByPriorityThenRecency(announcements) {
+            await notifier.announce(announcement, settings: notificationContentPreferences.settings)
         }
     }
 
@@ -336,6 +358,7 @@ final class AppSession {
         store.removeAll()
         ledger.clear()
         heldAlerts.clear()
+        subjectStatuses.clear()
         auth.signOut()
     }
 

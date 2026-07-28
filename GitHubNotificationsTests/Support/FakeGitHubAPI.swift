@@ -15,12 +15,14 @@ final class FakeGitHubAPI: GitHubAPI, @unchecked Sendable {
 
     var entireInboxResult: Result<[NotificationThread], GitHubError> = .success([])
     var markThreadResult: Result<Void, GitHubError> = .success(())
+    var subjectStatusResult: Result<SubjectStatus, GitHubError> = .success(.open)
 
     private(set) var fetchCount = 0
     private(set) var entireInboxFetchCount = 0
     private(set) var markedAsRead: [String] = []
     private(set) var markedAsDone: [String] = []
     private(set) var markedEverythingAsReadCount = 0
+    private(set) var subjectStatusURLs: [URL] = []
 
     func fetchAuthenticatedUser(usingToken token: String) async throws -> AuthenticatedUser {
         try userResult.get()
@@ -54,6 +56,12 @@ final class FakeGitHubAPI: GitHubAPI, @unchecked Sendable {
         markedEverythingAsReadCount += 1
 
         try markThreadResult.get()
+    }
+
+    func fetchSubjectStatus(at subjectURL: URL, usingToken token: String) async throws -> SubjectStatus {
+        subjectStatusURLs.append(subjectURL)
+
+        return try subjectStatusResult.get()
     }
 }
 

@@ -44,6 +44,13 @@ enum Fixtures {
         )
     }
 
+    static func announcement(
+        thread: NotificationThread = Fixtures.thread(),
+        update: ThreadUpdate = .reasonForNotifying,
+    ) -> ThreadAnnouncement {
+        ThreadAnnouncement(thread: thread, update: update)
+    }
+
     /// A directory of its own per test, so ledgers never touch the real
     /// Application Support folder or each other.
     static func temporaryDirectory() -> URL {

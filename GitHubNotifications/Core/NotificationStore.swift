@@ -13,6 +13,12 @@ final class NotificationStore {
     private(set) var threads: [NotificationThread] = []
     private(set) var groups: [RepositoryGroup] = []
 
+    /// What last changed about each thread, shown on its row beside the reason.
+    /// It is handed over by the session rather than worked out here, because the
+    /// only thing that knows what a thread looked like before this fetch is the
+    /// ledger of what has already been announced.
+    private(set) var latestUpdates: [String: ThreadUpdate] = [:]
+
     var rowsPerRepository: Int {
         didSet { regroup() }
     }
@@ -39,6 +45,10 @@ final class NotificationStore {
         } + readElsewhere
 
         regroup()
+    }
+
+    func showLatestUpdates(_ updates: [String: ThreadUpdate]) {
+        latestUpdates = updates
     }
 
     /// Clears the dot without losing the row, and remembers it so the next fetch
@@ -111,6 +121,7 @@ final class NotificationStore {
     func removeAll() {
         threads = []
         groups = []
+        latestUpdates = [:]
         readLedger.clear()
     }
 

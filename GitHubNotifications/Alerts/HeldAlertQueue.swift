@@ -9,7 +9,7 @@ final class HeldAlertQueue {
     private let fileURL: URL
     private let log: AppLog
 
-    private(set) var heldThreads: [NotificationThread] = []
+    private(set) var heldAnnouncements: [ThreadAnnouncement] = []
 
     init(fileURL: URL? = nil, log: AppLog) {
         self.fileURL = fileURL ?? Self.defaultFileURL()
@@ -19,31 +19,31 @@ final class HeldAlertQueue {
     }
 
     var isEmpty: Bool {
-        heldThreads.isEmpty
+        heldAnnouncements.isEmpty
     }
 
-    func hold(_ threads: [NotificationThread]) {
-        guard !threads.isEmpty else {
+    func hold(_ announcements: [ThreadAnnouncement]) {
+        guard !announcements.isEmpty else {
             return
         }
 
-        let alreadyHeld = Set(heldThreads.map(\.id))
-        heldThreads.append(contentsOf: threads.filter { !alreadyHeld.contains($0.id) })
+        let alreadyHeld = Set(heldAnnouncements.map(\.id))
+        heldAnnouncements.append(contentsOf: announcements.filter { !alreadyHeld.contains($0.id) })
 
         save()
     }
 
-    func drain() -> [NotificationThread] {
-        let released = heldThreads
+    func drain() -> [ThreadAnnouncement] {
+        let released = heldAnnouncements
 
-        heldThreads = []
+        heldAnnouncements = []
         save()
 
         return released
     }
 
     func clear() {
-        heldThreads = []
+        heldAnnouncements = []
         save()
     }
 
@@ -55,12 +55,20 @@ final class HeldAlertQueue {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        guard let stored = try? decoder.decode([NotificationThread].self, from: data) else {
+        if let stored = try? decoder.decode([ThreadAnnouncement].self, from: data) {
+            heldAnnouncements = stored
+            return
+        }
+
+        // A file written before held alerts carried what had changed holds bare
+        // threads. They are released saying why the thread is in the inbox,
+        // which is what they would have said on the night they were held.
+        guard let threads = try? decoder.decode([NotificationThread].self, from: data) else {
             log.warning("Couldn't read held notifications; starting with none.")
             return
         }
 
-        heldThreads = stored
+        heldAnnouncements = threads.map { ThreadAnnouncement(thread: $0, update: .reasonForNotifying) }
     }
 
     private func save() {
@@ -72,7 +80,7 @@ final class HeldAlertQueue {
                 at: fileURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true,
             )
-            try encoder.encode(heldThreads).write(to: fileURL, options: .atomic)
+            try encoder.encode(heldAnnouncements).write(to: fileURL, options: .atomic)
         } catch {
             log.warning("Couldn't save held notifications: \(error.localizedDescription)")
         }
