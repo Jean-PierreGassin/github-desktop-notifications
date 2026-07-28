@@ -167,8 +167,13 @@ struct InboxPanel: View {
                     },
                     onOpenInbox: session.openInbox,
                 )
+                .transition(.opacity)
             }
         }
+        // Dismissing the last row of a repository takes its heading with it, so
+        // the group leaves on the same beat as the row rather than snapping shut
+        // once the row has already gone.
+        .animation(.easeInOut(duration: RepositoryGroupView.removalDuration), value: session.store.groups.map(\.id))
         .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { height in
             listHeight = height
         }
