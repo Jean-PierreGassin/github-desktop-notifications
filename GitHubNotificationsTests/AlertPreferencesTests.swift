@@ -93,21 +93,73 @@ struct AlertPreferencesTests {
     }
 
     @Test
+    func holdsBackPushesAndChecksOutOfTheBox() {
+        let preferences = makePreferences()
+
+        #expect(preferences.followUpAlerts == .comments)
+        #expect(!preferences.allowsAlert(about: .otherActivity))
+    }
+
+    @Test(arguments: [
+        (FollowUpAlerts.everything, ThreadUpdate.comment, true),
+        (.everything, .reviewComment, true),
+        (.everything, .otherActivity, true),
+        (.comments, .comment, true),
+        (.comments, .reviewComment, true),
+        (.comments, .otherActivity, false),
+        (.nothing, .comment, false),
+        (.nothing, .reviewComment, false),
+        (.nothing, .otherActivity, false),
+    ])
+    func decidesWhichChangesToAKnownThreadAreWorthInterruptingFor(
+        followUpAlerts: FollowUpAlerts,
+        update: ThreadUpdate,
+        isAllowed: Bool,
+    ) {
+        let preferences = makePreferences()
+        preferences.followUpAlerts = followUpAlerts
+
+        #expect(preferences.allowsAlert(about: update) == isAllowed)
+    }
+
+    /// The guarantee that makes the quieter choices safe to pick: a thread the
+    /// user has not heard about, or one GitHub has re-reasoned because it now
+    /// concerns them more directly, always gets through.
+    @Test(arguments: FollowUpAlerts.allCases)
+    func neverSilencesAThreadWhoseReasonIsItselfTheNews(followUpAlerts: FollowUpAlerts) {
+        let preferences = makePreferences()
+        preferences.followUpAlerts = followUpAlerts
+
+        #expect(preferences.allowsAlert(about: .reasonForNotifying))
+    }
+
+    @Test
+    func remembersHowMuchFollowUpActivityToAlertOnAcrossLaunches() {
+        let defaults = makeDefaults()
+        AlertPreferences(defaults: defaults).followUpAlerts = .nothing
+
+        #expect(AlertPreferences(defaults: defaults).followUpAlerts == .nothing)
+    }
+
+    @Test
     func neverOffersTheUnrecognisedReasonAsAToggle() {
         #expect(!makePreferences().reasons(in: .low).contains(.unrecognised))
     }
 
     @Test
-    func resettingForgetsTheHandPickedSetAsWellAsThePreset() {
+    func resettingForgetsTheHandPickedSetAsWellAsThePresets() {
         let defaults = makeDefaults()
         let preferences = AlertPreferences(defaults: defaults)
         preferences.setEnabled(true, for: .ciActivity)
+        preferences.followUpAlerts = .everything
 
         preferences.resetToDefaults()
 
         #expect(preferences.preset == .essential)
+        #expect(preferences.followUpAlerts == .comments)
         #expect(!preferences.allowsAlert(for: .ciActivity))
         #expect(AlertPreferences(defaults: defaults).preset == .essential)
+        #expect(AlertPreferences(defaults: defaults).followUpAlerts == .comments)
     }
 
     private func makePreferences() -> AlertPreferences {

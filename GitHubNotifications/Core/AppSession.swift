@@ -262,7 +262,7 @@ final class AppSession {
     }
 
     private func announce(_ announcements: [ThreadAnnouncement]) {
-        let alertable = announcements.filter { alertPreferences.allowsAlert(for: $0.thread.reason) }
+        let alertable = announcements.filter(isWorthInterruptingFor)
 
         guard notifier.canPostNotifications, !alertable.isEmpty else {
             return
@@ -279,6 +279,15 @@ final class AppSession {
         log.info("Announcing \(alertable.count) new notifications.")
 
         Task { await post(alertable) }
+    }
+
+    /// Two questions rather than one: whether this kind of thread may interrupt
+    /// at all, and whether this particular change to it has earned an alert of
+    /// its own. The second is what keeps a pull request from alerting on every
+    /// push and green tick for as long as it is open.
+    private func isWorthInterruptingFor(_ announcement: ThreadAnnouncement) -> Bool {
+        alertPreferences.allowsAlert(for: announcement.thread.reason)
+            && alertPreferences.allowsAlert(about: announcement.update)
     }
 
     private func post(_ announcements: [ThreadAnnouncement]) async {

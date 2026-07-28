@@ -33,6 +33,9 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 - **Each notification says what changed**, so the comment on a pull request you were asked to review arrives as a
   comment, rather than as a repeat of the review request. Rows carry both: why the thread reached you, and what last
   happened in it.
+- **A long-running thread stops shouting.** Once you have been told about a pull request, you choose how much of what
+  follows is worth an interruption: everything, only new comments, or nothing else. Pushes and green ticks stop earning
+  a banner each, and you still get told the moment GitHub decides the thread concerns you more directly.
 - **Grouped by repository and ordered by urgency**, so review requests and mentions sit above other noise.
 - **Fifteen notification types you can switch individually**, or set presets if you would rather not.
 - **Work hours**, holding notifications outside your hours and delivering them together when your next working day
