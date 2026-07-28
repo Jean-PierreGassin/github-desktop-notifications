@@ -88,7 +88,7 @@ final class AppSession {
         notificationContentPreferences = NotificationContentPreferences(defaults: defaults)
         workHoursPreferences = WorkHoursPreferences(defaults: defaults)
         behaviourPreferences = BehaviourPreferences(defaults: defaults)
-        heldAlerts = HeldAlertQueue(log: log)
+        heldAlerts = HeldAlertQueue(fileURL: supportDirectory?.appending(path: "held-alerts.json"), log: log)
         launchAtLogin = LaunchAtLogin(log: log)
         ledger = SeenThreadLedger(fileURL: supportDirectory?.appending(path: "seen-threads.json"), log: log)
         avatars = AvatarCache(directory: supportDirectory?.appending(path: "avatars"), log: log)
