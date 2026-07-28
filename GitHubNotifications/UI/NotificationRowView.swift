@@ -8,6 +8,7 @@ struct NotificationRowView: View {
     private static let unreadDotSide: CGFloat = 7
 
     let thread: NotificationThread
+    let update: ThreadUpdate?
     let clickBehaviour: ClickBehaviour
     let onOpen: () -> Void
     let onApply: (ClickBehaviour) -> Void
@@ -83,9 +84,11 @@ struct NotificationRowView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
 
-                Text(thread.reason.displayName)
+                Text(caption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Spacer(minLength: 4)
@@ -113,6 +116,19 @@ struct NotificationRowView: View {
         }
     }
 
+    /// Why the thread is in the inbox, and what last happened in it. The reason
+    /// alone stops saying anything once a thread has been running a while: every
+    /// comment and review on a pull request you were asked to review is still a
+    /// review request, and a row reading the same as it did yesterday is a row
+    /// worth ignoring.
+    private var caption: String {
+        guard let change = update?.changeDescription else {
+            return thread.reason.displayName
+        }
+
+        return "\(thread.reason.displayName) · \(change)"
+    }
+
     /// The row truncates, so the tooltip carries everything in full.
     private var hoverDescription: String {
         let updatedDescription = thread.updatedAt.formatted(date: .abbreviated, time: .shortened)
@@ -120,7 +136,7 @@ struct NotificationRowView: View {
 
         return """
         \(thread.repository.fullName)\(visibility)
-        \(thread.reason.displayName)
+        \(caption)
 
         \(thread.subject.title)
 

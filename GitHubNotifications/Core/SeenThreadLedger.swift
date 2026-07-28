@@ -11,29 +11,33 @@ final class SeenThreadLedger {
         let updatedAt: Date
         let reason: NotificationReason?
         let latestCommentAPIURL: URL?
+        let update: ThreadUpdate?
 
         enum CodingKeys: String, CodingKey {
             case updatedAt
             case reason
             case latestCommentAPIURL
+            case update
         }
 
-        init(_ thread: NotificationThread) {
-            updatedAt = thread.updatedAt
-            reason = thread.reason
-            latestCommentAPIURL = thread.subject.latestCommentAPIURL
+        init(_ announcement: ThreadAnnouncement) {
+            updatedAt = announcement.thread.updatedAt
+            reason = announcement.thread.reason
+            latestCommentAPIURL = announcement.thread.subject.latestCommentAPIURL
+            update = announcement.update
         }
 
         /// A ledger written before alerts said what had changed holds a bare
-        /// date per thread. One is read as a thread whose reason and comments
-        /// were never recorded, rather than failing the file and re-seeding,
-        /// which would swallow a poll's worth of alerts on the first run after
-        /// an update.
+        /// date per thread. One is read as a thread whose reason, comments and
+        /// change were never recorded, rather than failing the file and
+        /// re-seeding, which would swallow a poll's worth of alerts on the first
+        /// run after an update.
         init(from decoder: Decoder) throws {
             if let updatedAt = try? decoder.singleValueContainer().decode(Date.self) {
                 self.updatedAt = updatedAt
                 reason = nil
                 latestCommentAPIURL = nil
+                update = nil
                 return
             }
 
@@ -42,6 +46,7 @@ final class SeenThreadLedger {
             updatedAt = try container.decode(Date.self, forKey: .updatedAt)
             reason = try container.decodeIfPresent(NotificationReason.self, forKey: .reason)
             latestCommentAPIURL = try container.decodeIfPresent(URL.self, forKey: .latestCommentAPIURL)
+            update = try container.decodeIfPresent(ThreadUpdate.self, forKey: .update)
         }
     }
 
@@ -63,22 +68,29 @@ final class SeenThreadLedger {
         load()
     }
 
+    /// What last changed about each thread still in the inbox, keyed by thread,
+    /// for the panel to show beside the reason. A thread carried over from a
+    /// ledger written before changes were recorded has nothing to show yet.
+    var latestUpdates: [String: ThreadUpdate] {
+        lastAnnouncedUpdates.compactMapValues(\.update)
+    }
+
     /// Returns the threads worth announcing, each paired with what has changed
-    /// about it, and records them as announced.
+    /// about it, and records every thread in the inbox as announced.
     ///
     /// The first run after signing in announces nothing: the whole inbox is
     /// already known to the user.
     func selectThreadsToAnnounce(from threads: [NotificationThread]) -> [ThreadAnnouncement] {
-        defer { record(threads) }
+        let announcements = threads.map { ThreadAnnouncement(thread: $0, update: update(for: $0)) }
+
+        defer { record(announcements) }
 
         guard hasBeenSeeded else {
             hasBeenSeeded = true
             return []
         }
 
-        return threads
-            .filter(isWorthAnnouncing)
-            .map { ThreadAnnouncement(thread: $0, update: update(for: $0)) }
+        return announcements.filter { isWorthAnnouncing($0.thread) }
     }
 
     func clear() {
@@ -106,9 +118,17 @@ final class SeenThreadLedger {
     /// A thread nothing has been said about yet, and one GitHub has re-reasoned
     /// because it now concerns the user more directly, both lead with the reason.
     private func update(for thread: NotificationThread) -> ThreadUpdate {
-        guard let lastAnnouncedUpdate = lastAnnouncedUpdates[thread.id],
-              lastAnnouncedUpdate.reason == thread.reason
-        else {
+        guard let lastAnnouncedUpdate = lastAnnouncedUpdates[thread.id] else {
+            return .reasonForNotifying
+        }
+
+        // Most polls change nothing, and a row must not lose what it says every
+        // time the inbox is read back unchanged.
+        guard thread.updatedAt > lastAnnouncedUpdate.updatedAt else {
+            return lastAnnouncedUpdate.update ?? .reasonForNotifying
+        }
+
+        guard lastAnnouncedUpdate.reason == thread.reason else {
             return .reasonForNotifying
         }
 
@@ -123,9 +143,9 @@ final class SeenThreadLedger {
     }
 
     /// Only threads still in the inbox are kept, so the file cannot grow forever.
-    private func record(_ threads: [NotificationThread]) {
+    private func record(_ announcements: [ThreadAnnouncement]) {
         lastAnnouncedUpdates = Dictionary(
-            threads.map { ($0.id, AnnouncedState($0)) },
+            announcements.map { ($0.id, AnnouncedState($0)) },
             uniquingKeysWith: { first, _ in first },
         )
 

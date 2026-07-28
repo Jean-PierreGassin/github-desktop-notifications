@@ -31,7 +31,8 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 - **Real desktop notifications**, delivered by macOS, so Notification Centre, your sounds and your Focus rules all apply
   (on top of in-app customisation).
 - **Each notification says what changed**, so the comment on a pull request you were asked to review arrives as a
-  comment, rather than as a repeat of the review request.
+  comment, rather than as a repeat of the review request. Rows carry both: why the thread reached you, and what last
+  happened in it.
 - **Grouped by repository and ordered by urgency**, so review requests and mentions sit above other noise.
 - **Fifteen notification types you can switch individually**, or set presets if you would rather not.
 - **Work hours**, holding notifications outside your hours and delivering them together when your next working day

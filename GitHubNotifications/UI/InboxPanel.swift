@@ -156,6 +156,7 @@ struct InboxPanel: View {
             ForEach(Array(session.store.groups.enumerated()), id: \.element.id) { index, group in
                 RepositoryGroupView(
                     group: group,
+                    latestUpdates: session.store.latestUpdates,
                     clickBehaviour: session.behaviourPreferences.clickBehaviour,
                     avatars: session.avatars,
                     showsDivider: index > 0,

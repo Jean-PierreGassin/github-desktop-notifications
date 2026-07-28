@@ -4,6 +4,7 @@ struct RepositoryGroupView: View {
     private static let avatarSide: CGFloat = 16
 
     let group: RepositoryGroup
+    let latestUpdates: [String: ThreadUpdate]
     let clickBehaviour: ClickBehaviour
     let avatars: AvatarCache
     let showsDivider: Bool
@@ -23,6 +24,7 @@ struct RepositoryGroupView: View {
             ForEach(group.visibleThreads) { thread in
                 NotificationRowView(
                     thread: thread,
+                    update: latestUpdates[thread.id],
                     clickBehaviour: clickBehaviour,
                     onOpen: { onOpenThread(thread) },
                     onApply: { behaviour in onApplyToThread(behaviour, thread) },

@@ -23,15 +23,22 @@ enum ThreadUpdate: String, Sendable, Codable {
     /// closed or merged pull request. GitHub does not say which.
     case otherActivity
 
-    /// The reason is what to say the first time round. After that the user
-    /// already knows why the thread is theirs and needs to know what changed.
-    func summary(for reason: NotificationReason) -> String {
+    /// What changed, on its own, for the panel rows that already say why the
+    /// thread is there. There is nothing to add when the reason is the news.
+    var changeDescription: String? {
         switch self {
-        case .reasonForNotifying: reason.displayName
+        case .reasonForNotifying: nil
         case .comment: "New comment"
         case .reviewComment: "New comment on the diff"
         case .otherActivity: "New activity"
         }
+    }
+
+    /// An alert has one line to work with, so the reason is what it says the
+    /// first time round. After that the user already knows why the thread is
+    /// theirs and needs to know what changed.
+    func summary(for reason: NotificationReason) -> String {
+        changeDescription ?? reason.displayName
     }
 
     /// GitHub names no event, so the kind of comment is read from the shape of

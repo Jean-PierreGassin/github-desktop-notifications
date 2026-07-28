@@ -109,6 +109,32 @@ struct SeenThreadLedgerTests {
         #expect(announced.map(\.update) == [.reasonForNotifying])
     }
 
+    @Test
+    func recordsTheLatestChangeAgainstEachThreadForThePanel() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        _ = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment),
+        ])
+
+        #expect(ledger.latestUpdates == ["a": .comment])
+    }
+
+    /// Most polls change nothing, and a row must not lose what it says every
+    /// time the inbox is read back unchanged.
+    @Test
+    func keepsShowingTheLatestChangeWhileNothingMoves() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+        let commented = reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment)
+        _ = ledger.selectThreadsToAnnounce(from: [commented])
+
+        _ = ledger.selectThreadsToAnnounce(from: [commented])
+
+        #expect(ledger.latestUpdates == ["a": .comment])
+    }
+
     /// A ledger from a version that recorded only dates has to keep working, or
     /// the first run after updating re-seeds and swallows a poll's alerts.
     @Test

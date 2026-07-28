@@ -239,7 +239,7 @@ final class AppSession {
 
     private func connectAlerts() {
         poller.onThreadsFetched = { [weak self] threads in
-            self?.announceNewThreads(among: threads)
+            self?.handleFetchedThreads(threads)
         }
 
         notifier.onAlertClicked = { [weak self] threadIdentifier in
@@ -249,8 +249,19 @@ final class AppSession {
 
     /// The ledger is always updated, even when alerts are off, so turning alerts
     /// back on does not replay a backlog.
-    private func announceNewThreads(among threads: [NotificationThread]) {
+    ///
+    /// What last changed reaches the panel whether or not it is worth an alert.
+    /// A row that says what happened is the answer to an alert missed, held or
+    /// never asked for, and it is why a busy thread does not need a banner per
+    /// event to stay legible.
+    private func handleFetchedThreads(_ threads: [NotificationThread]) {
         let announcements = ledger.selectThreadsToAnnounce(from: threads)
+
+        store.showLatestUpdates(ledger.latestUpdates)
+        announce(announcements)
+    }
+
+    private func announce(_ announcements: [ThreadAnnouncement]) {
         let alertable = announcements.filter { alertPreferences.allowsAlert(for: $0.thread.reason) }
 
         guard notifier.canPostNotifications, !alertable.isEmpty else {
