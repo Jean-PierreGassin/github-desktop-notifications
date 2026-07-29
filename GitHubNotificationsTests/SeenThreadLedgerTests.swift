@@ -7,6 +7,7 @@ import Testing
 struct SeenThreadLedgerTests {
     private let firstUpdate = Date(timeIntervalSince1970: 1_700_000_000)
     private let secondUpdate = Date(timeIntervalSince1970: 1_700_000_600)
+    private let thirdUpdate = Date(timeIntervalSince1970: 1_700_001_200)
     private let firstComment = "https://api.github.com/repos/acme/api/issues/comments/1"
     private let secondComment = "https://api.github.com/repos/acme/api/issues/comments/2"
 
@@ -125,6 +126,48 @@ struct SeenThreadLedgerTests {
                 updatedAt: secondUpdate,
                 latestCommentAPIURL: secondComment,
             ),
+        ])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    /// Being asked again is a new ask, and has to interrupt however quiet the
+    /// thread had gone. This is the ordinary route: reviewing a pull request
+    /// marks its notification read, so it leaves the unread inbox and the ledger
+    /// forgets it. When the author pushes changes and asks you again, the thread
+    /// is new to the app - which is what a fresh ask is.
+    @Test
+    func leadsWithTheAskWhenAReviewIsRequestedAgainAfterYouDealtWithIt() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        _ = ledger.selectThreadsToAnnounce(from: [])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: firstComment),
+        ])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    /// The same ask on a thread that never left the inbox. Reviewing makes you a
+    /// participant, so what follows is reasoned `subscribed` and goes quiet;
+    /// being asked again escalates it straight back to the front.
+    @Test
+    func leadsWithTheAskWhenAReviewIsRequestedAgainOnAThreadYouNowMerelyFollow() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+        _ = ledger.selectThreadsToAnnounce(from: [
+            Fixtures.thread(
+                id: "a",
+                reason: .subscribed,
+                updatedAt: secondUpdate,
+                latestCommentAPIURL: firstComment,
+            ),
+        ])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: thirdUpdate, commentAPIURL: firstComment),
         ])
 
         #expect(announced.map(\.update) == [.reasonForNotifying])

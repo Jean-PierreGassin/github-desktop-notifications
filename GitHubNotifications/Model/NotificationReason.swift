@@ -137,10 +137,20 @@ enum NotificationReason: String, Sendable, CaseIterable, Codable {
     /// don't. A thread you opened, were assigned, were named on or joined in on
     /// is the opposite, and what happens next on it is the whole point of it.
     ///
-    /// This does not silence anything for good. GitHub re-reasons a thread when
-    /// it starts concerning you differently - a review request becomes a mention
-    /// the moment someone writes your name on it - and a changed reason is news
-    /// under every follow-up setting there is.
+    /// This does not silence anything for good, and the two ways back in are the
+    /// ones that matter. Being named on a thread re-reasons it to a mention, and
+    /// a changed reason is news under every follow-up setting there is. Being
+    /// asked again arrives the same way: reviewing a pull request marks its
+    /// notification read, so a fresh request comes back as a thread the app has
+    /// never seen, and if it never left the inbox then reviewing has made you a
+    /// participant, so the ask escalates the reason back from `subscribed`.
+    ///
+    /// What it cannot see is a review re-requested on a thread that stayed
+    /// unread and never changed reason - approved over the API, without so much
+    /// as a comment in between. GitHub names no actor and no event in the
+    /// payload, so telling that apart from another reviewer's approval would
+    /// mean asking the pull request who it is still waiting on, one request per
+    /// changed thread per poll. The row still moves; only the banner is missed.
     var makesTheThreadYours: Bool {
         switch self {
         case .author, .assigned, .mentioned, .comment, .manual:
