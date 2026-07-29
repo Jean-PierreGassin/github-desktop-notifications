@@ -33,9 +33,9 @@ struct NotificationSettingsView: View {
         .font(.callout)
     }
 
-    /// Two pickers because there are two decisions, and reason alone cannot make
-    /// the second: which threads are allowed to interrupt, and how much of what
-    /// happens on them afterwards is worth interrupting for.
+    /// Three pickers because there are three decisions, and none of them can make
+    /// another: which threads may interrupt at all, what has to happen on one
+    /// before it interrupts again, and whose threads that second rule applies to.
     private var alerts: some View {
         Section {
             Picker("Notify me about", selection: presetBinding) {
@@ -49,13 +49,23 @@ struct NotificationSettingsView: View {
                     Text(followUp.displayName).tag(followUp)
                 }
             }
+
+            Picker("Follow up on", selection: followUpThreadsBinding) {
+                ForEach(FollowUpThreads.allCases, id: \.self) { threads in
+                    Text(threads.displayName).tag(threads)
+                }
+            }
+            .disabled(session.alertPreferences.followUpAlerts == .nothing)
+            .padding(.leading, Self.dependentIndent)
         } header: {
             SettingsSectionHeader(title: "Alerts") { session.alertPreferences.resetToDefaults() }
         } footer: {
             Text("\(session.alertPreferences.preset.summary) "
                 + "\(session.alertPreferences.followUpAlerts.summary) "
-                + "Everything still reaches the menu bar panel, which says what last happened. "
-                + "Reset restores both, and the types below with them.")
+                + "\(session.alertPreferences.followUpThreads.summary) "
+                + "Follow-up decides only whether a thread already on screen interrupts you again: its row is there "
+                + "either way, saying what last happened. "
+                + "Reset restores all three, and the types below with them.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -81,6 +91,11 @@ struct NotificationSettingsView: View {
             }
         } header: {
             SettingsSectionHeader(title: "Notification types") { session.alertPreferences.resetToDefaults() }
+        } footer: {
+            Text("These decide which notifications reach you at all, as banners and as rows alike. A type switched "
+                + "off raises no alert and takes no row, no unread count and no place in a bulk action. Switching it "
+                + "back on returns whatever is still in your GitHub inbox.")
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -94,14 +109,14 @@ struct NotificationSettingsView: View {
 
             Toggle("Show the thread title", isOn: contentBinding(\.showsThreadTitle))
 
-            Toggle("Show what happened", isOn: contentBinding(\.showsNotificationType))
+            Toggle("Show why it reached you and what changed", isOn: contentBinding(\.showsNotificationType))
         } header: {
             SettingsSectionHeader(title: "Notification content") {
                 session.notificationContentPreferences.resetContent()
             }
         } footer: {
-            Text("What each notification says when macOS shows it. The first notification about a thread says why it "
-                + "reached you, and the ones after it say what changed. The menu bar panel is unaffected.")
+            Text("What each notification says when macOS shows it. Every notification names why the thread is yours, "
+                + "and adds what has changed on it since, in the same words as the row in the menu bar panel.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -264,6 +279,13 @@ struct NotificationSettingsView: View {
         Binding(
             get: { session.alertPreferences.followUpAlerts },
             set: { session.alertPreferences.followUpAlerts = $0 },
+        )
+    }
+
+    private var followUpThreadsBinding: Binding<FollowUpThreads> {
+        Binding(
+            get: { session.alertPreferences.followUpThreads },
+            set: { session.alertPreferences.followUpThreads = $0 },
         )
     }
 

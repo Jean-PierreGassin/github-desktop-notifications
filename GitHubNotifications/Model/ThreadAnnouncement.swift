@@ -34,18 +34,28 @@ enum ThreadUpdate: String, Sendable, Codable {
         }
     }
 
-    /// An alert has one line to work with, so the reason is what it says the
-    /// first time round. After that the user already knows why the thread is
-    /// theirs and needs to know what changed.
-    func summary(for reason: NotificationReason) -> String {
-        changeDescription ?? reason.displayName
+    /// The one line the app says about a thread: why it reached the user, and
+    /// what has moved on it since. Both the panel row and the macOS alert print
+    /// this, so the two can never describe the same thread differently.
+    ///
+    /// The reason is always there. Leading with the change alone answered "what
+    /// happened" while dropping "why is this mine", which left an alert reading
+    /// "New comment" with nothing to say whose comment, on what, or why it was
+    /// worth interrupting for.
+    func caption(for reason: NotificationReason) -> String {
+        guard let change = changeDescription(alongside: reason) else {
+            return reason.displayName
+        }
+
+        return "\(reason.displayName) · \(change)"
     }
 
-    /// What changed, for a panel row that is already showing `reason` next to
-    /// it, or nothing when the reason has said it.
+    /// What changed, for a caption that is already showing `reason` next to it,
+    /// or nothing when the reason has said it.
     ///
-    /// A row prints the two together, so a pairing that restates itself reads as
-    /// a bug rather than as detail: "New comment on a thread · New comment".
+    /// A caption prints the two together, so a pairing that restates itself
+    /// reads as a bug rather than as detail: "New comment on a thread · New
+    /// comment".
     func changeDescription(alongside reason: NotificationReason) -> String? {
         guard !reasonsThatAlreadySayIt.contains(reason) else {
             return nil
@@ -92,4 +102,10 @@ struct ThreadAnnouncement: Sendable, Equatable, Codable, Identifiable {
     let update: ThreadUpdate
 
     var id: String { thread.id }
+
+    /// Why this thread reached the user and what has moved on it, worded exactly
+    /// as its row in the panel words it.
+    var caption: String {
+        update.caption(for: thread.reason)
+    }
 }

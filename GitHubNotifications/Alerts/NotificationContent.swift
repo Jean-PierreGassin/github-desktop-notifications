@@ -21,9 +21,12 @@ struct NotificationContentText: Sendable, Equatable {
 /// Builds the text of a notification from the user's choices, never leaving it
 /// blank however much has been switched off.
 ///
-/// The middle line is what the announcement is about rather than the thread's
-/// standing reason, so the comment that follows a review request does not arrive
-/// wearing the review request's words.
+/// The middle line is ``ThreadAnnouncement/caption``, the same line the panel
+/// row prints: why the thread is the user's, and what has moved on it since. It
+/// is deliberately not one or the other. An alert saying only what changed left
+/// the user with "New comment" and no way to tell a comment on a review they owe
+/// from a comment on a repository they happen to watch, and it disagreed with
+/// the row for the very same thread.
 enum NotificationContentFormatter {
     private static let fallbackTitle = "GitHub"
 
@@ -33,20 +36,20 @@ enum NotificationContentFormatter {
     ) -> NotificationContentText {
         let thread = announcement.thread
         let repositoryName = repositoryName(for: thread.repository, settings: settings)
-        let updateSummary = announcement.update.summary(for: thread.reason)
+        let caption = announcement.caption
         let threadTitle = thread.subject.title
 
         guard settings.showsThreadTitle else {
             return NotificationContentText(
                 title: repositoryName ?? fallbackTitle,
                 subtitle: "",
-                body: settings.showsNotificationType ? updateSummary : threadTitle,
+                body: settings.showsNotificationType ? caption : threadTitle,
             )
         }
 
         return NotificationContentText(
             title: repositoryName ?? fallbackTitle,
-            subtitle: settings.showsNotificationType ? updateSummary : "",
+            subtitle: settings.showsNotificationType ? caption : "",
             body: threadTitle,
         )
     }

@@ -143,12 +143,12 @@ struct NotificationRowView: View {
     /// comment and review on a pull request you were asked to review is still a
     /// review request, and a row reading the same as it did yesterday is a row
     /// worth ignoring.
+    ///
+    /// Built by ``ThreadUpdate/caption(for:)``, which is what the alert for this
+    /// thread is worded from as well. A row and the banner that sent the user to
+    /// it disagreeing about what happened is worse than either being terse.
     private var caption: String {
-        guard let change = update?.changeDescription(alongside: thread.reason) else {
-            return thread.reason.displayName
-        }
-
-        return "\(thread.reason.displayName) · \(change)"
+        update?.caption(for: thread.reason) ?? thread.reason.displayName
     }
 
     /// The row truncates, so the tooltip carries everything in full.

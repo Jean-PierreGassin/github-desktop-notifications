@@ -13,18 +13,24 @@ final class SeenThreadLedger {
         let latestCommentAPIURL: URL?
         let update: ThreadUpdate?
 
+        /// When the thread was last in the inbox, so entries for threads that
+        /// have left it can be aged out rather than kept for ever.
+        let lastSeenAt: Date
+
         enum CodingKeys: String, CodingKey {
             case updatedAt
             case reason
             case latestCommentAPIURL
             case update
+            case lastSeenAt
         }
 
-        init(_ announcement: ThreadAnnouncement) {
+        init(_ announcement: ThreadAnnouncement, seenAt: Date) {
             updatedAt = announcement.thread.updatedAt
             reason = announcement.thread.reason
             latestCommentAPIURL = announcement.thread.subject.latestCommentAPIURL
             update = announcement.update
+            lastSeenAt = seenAt
         }
 
         /// A ledger written before alerts said what had changed holds a bare
@@ -38,6 +44,7 @@ final class SeenThreadLedger {
                 reason = nil
                 latestCommentAPIURL = nil
                 update = nil
+                lastSeenAt = updatedAt
                 return
             }
 
@@ -47,6 +54,7 @@ final class SeenThreadLedger {
             reason = try container.decodeIfPresent(NotificationReason.self, forKey: .reason)
             latestCommentAPIURL = try container.decodeIfPresent(URL.self, forKey: .latestCommentAPIURL)
             update = try container.decodeIfPresent(ThreadUpdate.self, forKey: .update)
+            lastSeenAt = try container.decodeIfPresent(Date.self, forKey: .lastSeenAt) ?? updatedAt
         }
     }
 
@@ -54,6 +62,12 @@ final class SeenThreadLedger {
         var hasBeenSeeded: Bool
         var lastAnnouncedUpdates: [String: AnnouncedState]
     }
+
+    /// How long a thread is remembered after it leaves the inbox, and how many
+    /// are remembered at once. Both exist only to bound the file: a thread is
+    /// normally forgotten because it went quiet, not because either was hit.
+    private static let retentionPeriod: TimeInterval = 30 * 24 * 60 * 60
+    private static let retentionLimit = 2000
 
     private let fileURL: URL
     private let log: AppLog
@@ -68,9 +82,12 @@ final class SeenThreadLedger {
         load()
     }
 
-    /// What last changed about each thread still in the inbox, keyed by thread,
-    /// for the panel to show beside the reason. A thread carried over from a
-    /// ledger written before changes were recorded has nothing to show yet.
+    /// What last changed about each thread, keyed by thread, for the panel to
+    /// show beside the reason. A thread carried over from a ledger written before
+    /// changes were recorded has nothing to show yet.
+    ///
+    /// Threads that have left the inbox are in here too. The panel looks rows up
+    /// by identifier, so entries it has no row for cost nothing.
     var latestUpdates: [String: ThreadUpdate] {
         lastAnnouncedUpdates.compactMapValues(\.update)
     }
@@ -97,6 +114,20 @@ final class SeenThreadLedger {
         lastAnnouncedUpdates = [:]
         hasBeenSeeded = false
         try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    /// Drops what is remembered about a thread the user has dismissed.
+    ///
+    /// Reading a notification and dismissing it are different statements. Read
+    /// means seen, so the thread is remembered and whatever happens next is
+    /// reported as what it is. Dismissed means done with, exactly as it does on
+    /// GitHub, so if the thread ever comes back it comes back as news.
+    func forget(_ identifier: String) {
+        guard lastAnnouncedUpdates.removeValue(forKey: identifier) != nil else {
+            return
+        }
+
+        save()
     }
 
     private func isWorthAnnouncing(_ thread: NotificationThread) -> Bool {
@@ -128,7 +159,7 @@ final class SeenThreadLedger {
             return lastAnnouncedUpdate.update ?? .reasonForNotifying
         }
 
-        guard lastAnnouncedUpdate.reason == thread.reason else {
+        if isNews(thread.reason, replacing: lastAnnouncedUpdate.reason) {
             return .reasonForNotifying
         }
 
@@ -142,14 +173,70 @@ final class SeenThreadLedger {
         return commentUpdate
     }
 
-    /// Only threads still in the inbox are kept, so the file cannot grow forever.
-    private func record(_ announcements: [ThreadAnnouncement]) {
-        lastAnnouncedUpdates = Dictionary(
-            announcements.map { ($0.id, AnnouncedState($0)) },
-            uniquingKeysWith: { first, _ in first },
-        )
+    /// Whether GitHub changing why a thread concerns the user is itself the news.
+    ///
+    /// An escalation is: a repository you watch turns into a pull request you
+    /// have been asked to review, a review request turns into a mention. A
+    /// fall-back is not. Once someone has mentioned you on a thread you are a
+    /// participant in it, so the notifications after that arrive as `subscribed`,
+    /// and counting that as news would hand every thread the user has quietened
+    /// a way back in through the one door left open for mentions.
+    ///
+    /// The fall-back is not swallowed, only demoted: it goes on to be read as
+    /// whatever actually changed, and answers to the follow-up settings like any
+    /// other activity.
+    private func isNews(_ reason: NotificationReason, replacing previousReason: NotificationReason?) -> Bool {
+        // A ledger written before reasons were recorded knows nothing of this
+        // thread's history, so its reason has not been said yet.
+        guard let previousReason else {
+            return true
+        }
 
+        guard previousReason != reason else {
+            return false
+        }
+
+        return reason.priorityRank <= previousReason.priorityRank
+    }
+
+    /// Threads that have left the inbox are kept, and aged out rather than
+    /// dropped on sight.
+    ///
+    /// The inbox endpoint returns unread threads only, so reading a notification
+    /// takes it out of every fetch that follows. Forgetting it there and then
+    /// meant that anything happening on it afterwards - a comment, another
+    /// reviewer's approval - brought it back looking like a thread the app had
+    /// never seen, and announced it as the reason all over again. Reading a
+    /// notification is the most ordinary thing there is, and it was quietly
+    /// undoing every follow-up rule the user had set.
+    private func record(_ announcements: [ThreadAnnouncement]) {
+        let now = Date()
+
+        for announcement in announcements {
+            lastAnnouncedUpdates[announcement.id] = AnnouncedState(announcement, seenAt: now)
+        }
+
+        forgetThreadsGoneQuiet(asOf: now)
         save()
+    }
+
+    /// Keeping threads past the inbox has to stop somewhere. A thread not seen
+    /// for a month is one the user dealt with long ago, and anything that
+    /// happens on it after that is worth hearing about as though it were new.
+    private func forgetThreadsGoneQuiet(asOf now: Date) {
+        lastAnnouncedUpdates = lastAnnouncedUpdates.filter { _, state in
+            now.timeIntervalSince(state.lastSeenAt) < Self.retentionPeriod
+        }
+
+        guard lastAnnouncedUpdates.count > Self.retentionLimit else {
+            return
+        }
+
+        let survivors = lastAnnouncedUpdates
+            .sorted { $0.value.lastSeenAt > $1.value.lastSeenAt }
+            .prefix(Self.retentionLimit)
+
+        lastAnnouncedUpdates = Dictionary(uniqueKeysWithValues: survivors.map { ($0.key, $0.value) })
     }
 
     private func load() {

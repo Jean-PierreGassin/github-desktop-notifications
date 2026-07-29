@@ -24,20 +24,30 @@ struct ThreadUpdateTests {
         #expect(ThreadUpdate(latestCommentAPIURL: URL(string: url)!) == nil)
     }
 
+    /// The reason is never dropped for the change. An alert reading "New comment"
+    /// on its own cannot say whose comment, on what, or why it was worth being
+    /// interrupted for.
     @Test(arguments: [
-        (ThreadUpdate.comment, "New comment"),
-        (ThreadUpdate.reviewComment, "New comment on the diff"),
-        (ThreadUpdate.otherActivity, "New activity"),
+        (ThreadUpdate.comment, "Review requested from you · New comment"),
+        (ThreadUpdate.reviewComment, "Review requested from you · New comment on the diff"),
+        (ThreadUpdate.otherActivity, "Review requested from you · New activity"),
     ])
-    func saysWhatHappenedRatherThanWhyTheThreadIsInTheInbox(update: ThreadUpdate, expected: String) {
-        #expect(update.summary(for: .reviewRequested) == expected)
+    func saysWhyTheThreadIsYoursAndWhatHappened(update: ThreadUpdate, expected: String) {
+        #expect(update.caption(for: .reviewRequested) == expected)
     }
 
     @Test
-    func fallsBackToTheReasonWhenThatIsItselfTheNews() {
-        let summary = ThreadUpdate.reasonForNotifying.summary(for: .reviewRequested)
+    func saysTheReasonAloneWhenThatIsItselfTheNews() {
+        let caption = ThreadUpdate.reasonForNotifying.caption(for: .reviewRequested)
 
-        #expect(summary == NotificationReason.reviewRequested.displayName)
+        #expect(caption == NotificationReason.reviewRequested.displayName)
+    }
+
+    /// The pairing that would restate itself is dropped in the caption too, so
+    /// nothing reads "New comment on a thread · New comment".
+    @Test
+    func doesNotRepeatItselfWhenTheReasonAlreadySaysWhatChanged() {
+        #expect(ThreadUpdate.comment.caption(for: .comment) == NotificationReason.comment.displayName)
     }
 
     /// A row prints the reason and the change side by side, so a pairing that

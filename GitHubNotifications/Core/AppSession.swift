@@ -38,8 +38,12 @@ final class AppSession {
     /// visible-row limit evicts them.
     private static let reconciliationInterval: Duration = .seconds(3600)
 
+    /// What the app remembers about each thread it has already announced. Not
+    /// private for the same reason the store is not: this is the composition root,
+    /// and dismissing a thread has to be checked against what it forgets.
+    let ledger: SeenThreadLedger
+
     private let api: GitHubAPI
-    private let ledger: SeenThreadLedger
     private let readLedger: ReadThreadLedger
     private let defaults: UserDefaults
 
@@ -97,6 +101,25 @@ final class AppSession {
         updatePreferences = UpdatePreferences(defaults: defaults)
         updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
+
+        connectTypeFilter()
+    }
+
+    /// The one place the panel is told which types it may show, and it is told
+    /// the same list the alerts are gated on. A banner and a row are the same
+    /// notification arriving twice, so they answer to one setting: a type
+    /// switched off used to be silenced and still take a row, which read as the
+    /// setting not having worked.
+    private func connectTypeFilter() {
+        store.shownReasons = alertPreferences.allowedReasons
+
+        alertPreferences.onAllowedReasonsChanged = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            store.shownReasons = alertPreferences.allowedReasons
+        }
     }
 
     var rowsPerRepository: Int {
@@ -285,11 +308,12 @@ final class AppSession {
 
     /// Two questions rather than one: whether this kind of thread may interrupt
     /// at all, and whether this particular change to it has earned an alert of
-    /// its own. The second is what keeps a pull request from alerting on every
-    /// push and green tick for as long as it is open.
+    /// its own. The second reads the reason as well as the change, because what
+    /// happened is only half of whether it needs you - the other half is whose
+    /// thread it happened on.
     private func isWorthInterruptingFor(_ announcement: ThreadAnnouncement) -> Bool {
         alertPreferences.allowsAlert(for: announcement.thread.reason)
-            && alertPreferences.allowsAlert(about: announcement.update)
+            && alertPreferences.allowsAlert(about: announcement.update, on: announcement.thread.reason)
     }
 
     private func post(_ announcements: [ThreadAnnouncement]) async {
@@ -388,9 +412,10 @@ final class AppSession {
             return
         }
 
-        let originalIndex = store.threads.firstIndex(where: { $0.id == thread.id })
-
-        applyLocally(behaviour, to: thread)
+        // The position comes back from the removal itself rather than being read
+        // off the visible rows beforehand: with types hidden, the two are not the
+        // same index, and a rollback has to use the one the store restores with.
+        let originalIndex = applyLocally(behaviour, to: thread)
 
         do {
             if behaviour.marksAsRead {
@@ -403,16 +428,27 @@ final class AppSession {
         } catch {
             rollBack(behaviour, of: thread, to: originalIndex)
             report(error, whileApplying: behaviour, to: thread)
-        }
-    }
-
-    private func applyLocally(_ behaviour: ClickBehaviour, to thread: NotificationThread) {
-        guard behaviour.dismisses else {
-            store.markRead(thread.id)
             return
         }
 
-        store.removeThread(withIdentifier: thread.id)
+        // Only once GitHub has accepted it, so a refusal leaves the ledger as it
+        // found it along with the row. Forgetting on the way out would have the
+        // thread come back as news on the next poll, having never gone anywhere.
+        if behaviour.dismisses {
+            ledger.forget(thread.id)
+        }
+    }
+
+    /// Returns where a dismissed thread was, for putting it back if GitHub
+    /// refuses. Marking read leaves the row where it is, so there is nothing to
+    /// remember.
+    private func applyLocally(_ behaviour: ClickBehaviour, to thread: NotificationThread) -> Int? {
+        guard behaviour.dismisses else {
+            store.markRead(thread.id)
+            return nil
+        }
+
+        return store.removeThread(withIdentifier: thread.id)
     }
 
     private func rollBack(_ behaviour: ClickBehaviour, of thread: NotificationThread, to index: Int?) {
@@ -479,6 +515,7 @@ final class AppSession {
             do {
                 try await api.markThreadAsDone(threadIdentifier: thread.id, usingToken: token)
                 store.removeThread(withIdentifier: thread.id)
+                ledger.forget(thread.id)
             } catch {
                 lastActionFailure = "Stopped after \(offset) of \(threads.count). \(userFacingReason(for: error))"
                 log.warning(lastActionFailure ?? "")
