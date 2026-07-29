@@ -138,7 +138,6 @@ struct AppSessionTests {
     @Test
     func keepsSwitchedOffTypesOutOfThePanelEntirely() async {
         let session = await makeSession()
-        session.alertPreferences.panelContents = .chosenTypes
         session.alertPreferences.select(.essential)
 
         session.store.replaceAll(with: [
@@ -152,13 +151,31 @@ struct AppSessionTests {
         #expect(session.store.groups.flatMap { $0.visibleThreads.map(\.id) } == ["wanted"])
     }
 
+    /// The invariant, from the outside: whatever the settings, a thread has a row
+    /// if and only if its type is one the app would alert on. There is no
+    /// arrangement of settings that produces a row nobody was told about.
+    @Test(arguments: AlertPreset.allCases)
+    func givesARowToEveryTypeItAlertsOnAndNoOthers(preset: AlertPreset) async {
+        let session = await makeSession()
+        session.alertPreferences.select(preset)
+
+        let inbox = NotificationReason.allCases.enumerated().map { index, reason in
+            Fixtures.thread(id: "\(index)", reason: reason)
+        }
+        session.store.replaceAll(with: inbox)
+
+        let shown = Set(session.store.threads.map(\.reason))
+        let alerted = Set(NotificationReason.allCases.filter(session.alertPreferences.allowsAlert(for:)))
+
+        #expect(shown == alerted)
+    }
+
     /// Polling is conditional, so an unchanged inbox answers 304 and the panel is
     /// never handed a fresh list. Switching a type back on has to bring its rows
     /// back on the spot rather than whenever GitHub next has news.
     @Test
     func bringsATypeBackAsSoonAsItIsSwitchedOnAgain() async {
         let session = await makeSession()
-        session.alertPreferences.panelContents = .chosenTypes
         session.alertPreferences.select(.essential)
         session.store.replaceAll(with: [Fixtures.thread(id: "1", reason: .comment)])
 
@@ -169,25 +186,12 @@ struct AppSessionTests {
         #expect(session.store.threads.map(\.id) == ["1"])
     }
 
-    @Test
-    func showsTheWholeInboxForAUserWhoAsksForIt() async {
-        let session = await makeSession()
-        session.alertPreferences.select(.essential)
-        session.alertPreferences.panelContents = .everything
-
-        session.store.replaceAll(with: [Fixtures.thread(id: "1", reason: .ciActivity)])
-
-        #expect(session.store.threads.map(\.id) == ["1"])
-        #expect(!session.alertPreferences.allowsAlert(for: .ciActivity))
-    }
-
     /// A hidden type must not be dismissed by a bulk action either. The panel
     /// says how many rows the button will clear, and the button has to mean it.
     @Test
     func leavesHiddenTypesOutOfABulkDismiss() async {
         let api = FakeGitHubAPI()
         let session = await makeSession(api: api)
-        session.alertPreferences.panelContents = .chosenTypes
         session.alertPreferences.select(.essential)
         session.store.replaceAll(with: [
             Fixtures.thread(id: "wanted", reason: .reviewRequested),
@@ -212,10 +216,10 @@ struct AppSessionTests {
             supportDirectory: Fixtures.temporaryDirectory(),
         )
 
-        // These tests are about what happens to a row, not about which rows the
-        // user has asked for, so the panel is left showing everything rather
-        // than filtering the fixtures out from under them.
-        session.alertPreferences.panelContents = .everything
+        // These tests are about what happens to a row, not about which types earn
+        // one, so every type is switched on rather than filtering the fixtures
+        // out from under them. Tests that are about the filter choose their own.
+        session.alertPreferences.select(.everything)
 
         await session.signIn(withToken: "ghp_valid")
         session.store.replaceAll(with: threads)

@@ -230,69 +230,79 @@ struct AlertPreferencesTests {
         preferences.setEnabled(true, for: .ciActivity)
         preferences.followUpAlerts = .nothing
         preferences.followUpThreads = .everyThread
-        preferences.panelContents = .everything
 
         preferences.resetToDefaults()
 
         #expect(preferences.preset == .essential)
         #expect(preferences.followUpAlerts == .everything)
         #expect(preferences.followUpThreads == .yours)
-        #expect(preferences.panelContents == .chosenTypes)
         #expect(!preferences.allowsAlert(for: .ciActivity))
         #expect(AlertPreferences(defaults: defaults).preset == .essential)
         #expect(AlertPreferences(defaults: defaults).followUpAlerts == .everything)
         #expect(AlertPreferences(defaults: defaults).followUpThreads == .yours)
-        #expect(AlertPreferences(defaults: defaults).panelContents == .chosenTypes)
+    }
+
+    /// A banner and a row are the same notification arriving in two places, so
+    /// there is one list of types behind both. Nothing may alert that would not
+    /// take a row, and nothing may take a row that would never have alerted.
+    @Test(arguments: NotificationReason.allCases)
+    func gatesAlertsAndRowsOnOneList(reason: NotificationReason) {
+        let preferences = makePreferences()
+
+        #expect(preferences.allowedReasons.contains(reason) == preferences.allowsAlert(for: reason))
     }
 
     @Test
-    func showsOnlyTheTypesTheUserAskedForOutOfTheBox() {
+    func allowsOnlyTheTypesTheUserAskedFor() {
         let preferences = makePreferences()
 
-        #expect(preferences.panelContents == .chosenTypes)
-        #expect(preferences.shownReasons.contains(.reviewRequested))
-        #expect(!preferences.shownReasons.contains(.ciActivity))
+        #expect(preferences.allowedReasons.contains(.reviewRequested))
+        #expect(!preferences.allowedReasons.contains(.ciActivity))
+
+        preferences.setEnabled(true, for: .ciActivity)
+
+        #expect(preferences.allowedReasons.contains(.ciActivity))
+    }
+
+    /// The one type with no checkbox, because there is no name to put on one.
+    /// Filtering it out would swallow a whole class of notification the day
+    /// GitHub invents a reason, with nothing to switch back on.
+    @Test(arguments: AlertPreset.allCases)
+    func alwaysAllowsAReasonItHasNoNameForYet(preset: AlertPreset) {
+        let preferences = makePreferences()
+
+        preferences.select(preset)
+
+        #expect(preferences.allowedReasons.contains(.unrecognised))
+        #expect(preferences.allowsAlert(for: .unrecognised))
+    }
+
+    /// Hand-picking must not be knocked off its preset by a type that is not on
+    /// the list, which is what folding `unrecognised` into the stored set would
+    /// have done.
+    @Test
+    func stillSnapsBackToAPresetDespiteTheTypeWithNoCheckbox() {
+        let preferences = makePreferences()
+        preferences.select(.everything)
+
+        for reason in preferences.reasons(in: .systemEvents) {
+            preferences.setEnabled(false, for: reason)
+        }
+
+        #expect(preferences.preset == .exceptSystemEvents)
+        #expect(preferences.allowedReasons.contains(.unrecognised))
     }
 
     @Test
-    func showsTheWholeInboxWhenAskedTo() {
-        let preferences = makePreferences()
-
-        preferences.panelContents = .everything
-
-        #expect(NotificationReason.allCases.allSatisfy(preferences.shownReasons.contains))
-        #expect(!preferences.allowsAlert(for: .ciActivity))
-    }
-
-    /// A reason with no name in this app has no checkbox either, so it cannot
-    /// have been switched off and must not be filtered away as though it had.
-    @Test(arguments: PanelContents.allCases)
-    func alwaysShowsAReasonItHasNoNameForYet(panelContents: PanelContents) {
-        let preferences = makePreferences()
-
-        preferences.panelContents = panelContents
-
-        #expect(preferences.shownReasons.contains(.unrecognised))
-    }
-
-    @Test
-    func tellsWhoeverIsListeningAsSoonAsWhatThePanelShowsChanges() {
+    func tellsWhoeverIsListeningAsSoonAsTheAllowedTypesChange() {
         let preferences = makePreferences()
         var changeCount = 0
-        preferences.onShownReasonsChanged = { changeCount += 1 }
+        preferences.onAllowedReasonsChanged = { changeCount += 1 }
 
         preferences.setEnabled(false, for: .mentioned)
-        preferences.panelContents = .everything
+        preferences.select(.everything)
 
         #expect(changeCount == 2)
-    }
-
-    @Test
-    func remembersWhatThePanelShowsAcrossLaunches() {
-        let defaults = makeDefaults()
-        AlertPreferences(defaults: defaults).panelContents = .everything
-
-        #expect(AlertPreferences(defaults: defaults).panelContents == .everything)
     }
 
     private func makePreferences() -> AlertPreferences {

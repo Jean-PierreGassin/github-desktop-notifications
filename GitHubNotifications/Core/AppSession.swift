@@ -101,18 +101,20 @@ final class AppSession {
         connectTypeFilter()
     }
 
-    /// Keeps the panel showing what the user has asked it to show. Switching a
-    /// type off used to silence it and leave the row, which read as the setting
-    /// not having worked.
+    /// The one place the panel is told which types it may show, and it is told
+    /// the same list the alerts are gated on. A banner and a row are the same
+    /// notification arriving twice, so they answer to one setting: a type
+    /// switched off used to be silenced and still take a row, which read as the
+    /// setting not having worked.
     private func connectTypeFilter() {
-        store.shownReasons = alertPreferences.shownReasons
+        store.shownReasons = alertPreferences.allowedReasons
 
-        alertPreferences.onShownReasonsChanged = { [weak self] in
+        alertPreferences.onAllowedReasonsChanged = { [weak self] in
             guard let self else {
                 return
             }
 
-            store.shownReasons = alertPreferences.shownReasons
+            store.shownReasons = alertPreferences.allowedReasons
         }
     }
 

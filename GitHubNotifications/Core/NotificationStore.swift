@@ -23,8 +23,10 @@ final class NotificationStore {
     private(set) var threads: [NotificationThread] = []
     private(set) var groups: [RepositoryGroup] = []
 
-    /// The notification types the user asked for. Threads of any other type are
-    /// held but never shown, so they raise no row, no count and no bulk action.
+    /// The notification types the user asked for, which is the same list the
+    /// alerts are gated on: a row and a banner are the same notification arriving
+    /// in two places. Threads of any other type are held but never shown, so they
+    /// raise no row, no count and no bulk action.
     var shownReasons: Set<NotificationReason> = Set(NotificationReason.allCases) {
         didSet { regroup() }
     }

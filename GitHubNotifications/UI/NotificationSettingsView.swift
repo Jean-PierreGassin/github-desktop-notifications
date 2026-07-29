@@ -63,8 +63,8 @@ struct NotificationSettingsView: View {
             Text("\(session.alertPreferences.preset.summary) "
                 + "\(session.alertPreferences.followUpAlerts.summary) "
                 + "\(session.alertPreferences.followUpThreads.summary) "
-                + "Follow-up only decides what interrupts you: every change to a type you have switched on still "
-                + "reaches its row in the menu bar panel, which says what last happened. "
+                + "Follow-up decides only whether a thread already on screen interrupts you again: its row is there "
+                + "either way, saying what last happened. "
                 + "Reset restores all three, and the types below with them.")
                 .foregroundStyle(.secondary)
         }
@@ -76,12 +76,6 @@ struct NotificationSettingsView: View {
     /// own alignment instead of a nested stack's.
     private var notificationTypes: some View {
         Section {
-            Picker("Menu bar panel shows", selection: panelContentsBinding) {
-                ForEach(PanelContents.allCases, id: \.self) { contents in
-                    Text(contents.displayName).tag(contents)
-                }
-            }
-
             ForEach(NotificationGroup.allCases, id: \.self) { group in
                 Text(group.displayName)
                     .font(.caption)
@@ -98,7 +92,9 @@ struct NotificationSettingsView: View {
         } header: {
             SettingsSectionHeader(title: "Notification types") { session.alertPreferences.resetToDefaults() }
         } footer: {
-            Text("These decide which notifications reach you at all. \(session.alertPreferences.panelContents.summary)")
+            Text("These decide which notifications reach you at all, as banners and as rows alike. A type switched "
+                + "off raises no alert and takes no row, no unread count and no place in a bulk action. Switching it "
+                + "back on returns whatever is still in your GitHub inbox.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -276,13 +272,6 @@ struct NotificationSettingsView: View {
         Binding(
             get: { session.alertPreferences.preset },
             set: { session.alertPreferences.select($0) },
-        )
-    }
-
-    private var panelContentsBinding: Binding<PanelContents> {
-        Binding(
-            get: { session.alertPreferences.panelContents },
-            set: { session.alertPreferences.panelContents = $0 },
         )
     }
 

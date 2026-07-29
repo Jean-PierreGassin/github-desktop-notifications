@@ -40,9 +40,9 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
   moment someone writes your name on that quiet review request, it is news again. Nothing is silenced for good.
 - **You pick how much follow-up is worth interrupting you**: everything, only new comments, or nothing after the first
   one — and whether that applies to your threads or every thread you alert on.
-- **A type you switch off is gone from the menu bar too**, not just silenced: no row, no unread count, no place in a
-  bulk action. Switch it back on and whatever is still in your GitHub inbox comes back. One picker keeps the old
-  behaviour if you would rather alert on little and read the rest at leisure.
+- **Banners and rows are one list, not two.** You never get a notification that isn't waiting in the menu bar, and
+  never a row for something you were never told about. A type you switch off is gone from both — no alert, no row, no
+  unread count, no place in a bulk action — and switching it back on returns whatever is still in your GitHub inbox.
 - **Rows show merged, closed and draft**, so you know a pull request is already done without opening it.
 - **Grouped by repository and ordered by urgency**, so review requests and mentions sit above other noise.
 - **Fifteen notification types you can switch individually**, or set presets if you would rather not.

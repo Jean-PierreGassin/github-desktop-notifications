@@ -130,44 +130,19 @@ enum FollowUpThreads: String, Sendable, CaseIterable, Codable {
     }
 }
 
-/// How much of the GitHub inbox the menu bar panel is a view of.
+/// Which notifications the user wants: which types of thread reach them, and how
+/// much of what happens on one afterwards is worth interrupting for again.
 ///
-/// A type switched off used to be silent and still take a row, which is the
-/// worst of both: the setting looked as though it had not worked, and the panel
-/// filled with threads the user had already said they did not want.
+/// The types are one list, not two. A banner and a row are the same notification
+/// arriving in two places, so a type switched off is gone from both and a type
+/// switched on is in both. There is deliberately no setting to unpick them: a
+/// row with no banner behind it is something the user was never told about, and
+/// a banner with no row behind it is something they cannot go back to.
 ///
-/// Both answers are legitimate, which is why this is asked rather than assumed.
-/// Alerting on little and reading the rest at leisure is a real way to use the
-/// app, and so is wanting a type gone entirely.
-enum PanelContents: String, Sendable, CaseIterable, Codable {
-    case chosenTypes
-    case everything
-
-    var displayName: String {
-        switch self {
-        case .chosenTypes: "Only the types switched on below"
-        case .everything: "Everything in your GitHub inbox"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .chosenTypes:
-            "A type switched off takes no row, no count and no place in a bulk action. "
-                + "Switching it back on returns whatever is still in your inbox."
-        case .everything:
-            "Every thread GitHub puts in your inbox gets a row, including types you never want alerts for."
-        }
-    }
-}
-
-/// Which notifications the user wants: which types of thread reach them, which
-/// of those may interrupt, and how much of what happens afterwards is worth
-/// interrupting for.
-///
-/// The follow-up choice is about interrupting only. Every change to a thread the
-/// panel shows still reaches its row, because a row that says what last happened
-/// is the answer to an alert missed, held or never asked for.
+/// The follow-up choice does not break that. It decides whether a thread already
+/// on screen interrupts *again* when something happens on it - the row is there
+/// either way, saying what last happened, which is what makes an alert missed,
+/// held or deliberately not asked for recoverable.
 @MainActor
 @Observable
 final class AlertPreferences {
@@ -188,16 +163,10 @@ final class AlertPreferences {
     /// you until someone says your name.
     static let defaultFollowUpThreads = FollowUpThreads.yours
 
-    /// A type the user has switched off is one they have said they do not want,
-    /// and the panel takes them at their word. The other choice is one picker
-    /// away and the section says so.
-    static let defaultPanelContents = PanelContents.chosenTypes
-
     private static let presetKey = "alertPreset"
     private static let customReasonsKey = "customAlertReasons"
     private static let followUpAlertsKey = "followUpAlerts"
     private static let followUpThreadsKey = "followUpThreads"
-    private static let panelContentsKey = "panelContents"
 
     private let defaults: UserDefaults
 
@@ -213,15 +182,11 @@ final class AlertPreferences {
         didSet { save() }
     }
 
-    var panelContents: PanelContents {
-        didSet { save() }
-    }
-
-    /// Called whenever what the panel may show changes, so it can be re-filtered
+    /// Called whenever the allowed types change, so the panel can be re-filtered
     /// there and then. Polling is conditional and an unchanged inbox answers 304,
     /// so waiting for the next fetch could leave a switched-off type on screen
     /// until something unrelated happened.
-    var onShownReasonsChanged: (() -> Void)?
+    var onAllowedReasonsChanged: (() -> Void)?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -234,29 +199,26 @@ final class AlertPreferences {
             .flatMap(FollowUpAlerts.init(rawValue:)) ?? Self.defaultFollowUpAlerts
         followUpThreads = defaults.string(forKey: Self.followUpThreadsKey)
             .flatMap(FollowUpThreads.init(rawValue:)) ?? Self.defaultFollowUpThreads
-        panelContents = defaults.string(forKey: Self.panelContentsKey)
-            .flatMap(PanelContents.init(rawValue:)) ?? Self.defaultPanelContents
     }
 
     var enabledReasons: Set<NotificationReason> {
         preset.reasons ?? customReasons
     }
 
-    /// The types the panel is allowed to show.
+    /// Every type that may reach the user at all - as a banner and as a row, the
+    /// same list for both.
     ///
-    /// ``NotificationReason/unrecognised`` is always among them. It is not in the
-    /// settings list, so it cannot have been switched off, and dropping it would
-    /// hide a thread the user has no control to bring back the day GitHub adds a
-    /// reason this app has no name for yet.
-    var shownReasons: Set<NotificationReason> {
-        switch panelContents {
-        case .everything: Set(NotificationReason.allCases)
-        case .chosenTypes: enabledReasons.union([.unrecognised])
-        }
+    /// ``NotificationReason/unrecognised`` is always in it, and is the one type
+    /// with no checkbox: the app has no name to put on one. Leaving it out would
+    /// swallow a whole class of notification the day GitHub invents a reason,
+    /// with nothing for the user to switch back on. Letting an unknown type
+    /// through is the mistake worth making of the two.
+    var allowedReasons: Set<NotificationReason> {
+        enabledReasons.union([.unrecognised])
     }
 
     func allowsAlert(for reason: NotificationReason) -> Bool {
-        enabledReasons.contains(reason)
+        allowedReasons.contains(reason)
     }
 
     /// Whether this change, on a thread that reached the user for this reason, has
@@ -312,7 +274,6 @@ final class AlertPreferences {
         customReasons = []
         followUpAlerts = Self.defaultFollowUpAlerts
         followUpThreads = Self.defaultFollowUpThreads
-        panelContents = Self.defaultPanelContents
         save()
     }
 
@@ -327,8 +288,7 @@ final class AlertPreferences {
         defaults.set(customReasons.map(\.rawValue), forKey: Self.customReasonsKey)
         defaults.set(followUpAlerts.rawValue, forKey: Self.followUpAlertsKey)
         defaults.set(followUpThreads.rawValue, forKey: Self.followUpThreadsKey)
-        defaults.set(panelContents.rawValue, forKey: Self.panelContentsKey)
 
-        onShownReasonsChanged?()
+        onAllowedReasonsChanged?()
     }
 }
