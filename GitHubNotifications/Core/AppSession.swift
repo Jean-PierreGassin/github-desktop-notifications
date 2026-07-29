@@ -38,8 +38,12 @@ final class AppSession {
     /// visible-row limit evicts them.
     private static let reconciliationInterval: Duration = .seconds(3600)
 
+    /// What the app remembers about each thread it has already announced. Not
+    /// private for the same reason the store is not: this is the composition root,
+    /// and dismissing a thread has to be checked against what it forgets.
+    let ledger: SeenThreadLedger
+
     private let api: GitHubAPI
-    private let ledger: SeenThreadLedger
     private let readLedger: ReadThreadLedger
     private let defaults: UserDefaults
 
@@ -99,7 +103,6 @@ final class AppSession {
         poller = Poller(api: api, auth: auth, store: store, log: log)
 
         connectTypeFilter()
-        connectAlerts()
     }
 
     /// The one place the panel is told which types it may show, and it is told
@@ -159,6 +162,7 @@ final class AppSession {
 
         log.info("GitHub Notifications \(AppVersion.current) started.")
 
+        connectAlerts()
         notifier.installClickHandler()
 
         await notifier.requestAuthorization()
@@ -258,10 +262,6 @@ final class AppSession {
         await post(released)
     }
 
-    /// Wiring, not launch work, so it happens when the session is built rather
-    /// than in ``start()``: nothing can poll or be clicked before then, and the
-    /// launch path is skipped under tests, which used to leave the alert path
-    /// unreachable by any test at all.
     private func connectAlerts() {
         poller.onThreadsFetched = { [weak self] threads in
             self?.handleFetchedThreads(threads)
