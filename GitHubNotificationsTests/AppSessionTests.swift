@@ -5,6 +5,10 @@ import Testing
 
 @MainActor
 struct AppSessionTests {
+    private let secondUpdate = Date(timeIntervalSince1970: 1_700_000_600)
+    private let firstComment = "https://api.github.com/repos/acme/api/issues/comments/1"
+    private let secondComment = "https://api.github.com/repos/acme/api/issues/comments/2"
+
     @Test
     func markingReadKeepsTheRowAndTellsGitHubOnlyThat() async {
         let api = FakeGitHubAPI()
@@ -201,6 +205,60 @@ struct AppSessionTests {
         await session.applyToEverything(.dismissed)
 
         #expect(api.markedAsDone == ["wanted"])
+    }
+
+    /// A refusal puts the row back, and what the app remembers about the thread
+    /// has to go back with it. Forgetting on the way out left a thread that never
+    /// went anywhere to be announced as new on the next poll.
+    @Test
+    func aRefusedDismissLeavesTheThreadRememberedAsWellAsOnScreen() async {
+        let api = FakeGitHubAPI()
+        let session = await makeSession(api: api)
+        let thread = Fixtures.thread(id: "1", latestCommentAPIURL: firstComment)
+        fetch([thread], into: session)
+
+        api.markThreadResult = .failure(.serverFailure(statusCode: 500))
+        await session.apply(.dismissed, to: thread)
+        api.markThreadResult = .success(())
+
+        fetch([commentedOn(thread)], into: session)
+
+        #expect(session.store.latestUpdates["1"] == .comment)
+    }
+
+    /// Dismissing in bulk says done with just as dismissing one row does, so a
+    /// thread that comes back after one comes back as news rather than as the
+    /// next line of a conversation the user has closed.
+    @Test
+    func aBulkDismissForgetsTheThreadsItClears() async {
+        let api = FakeGitHubAPI()
+        let session = await makeSession(api: api)
+        let thread = Fixtures.thread(id: "1", latestCommentAPIURL: firstComment)
+        fetch([thread], into: session)
+
+        await session.applyToEverything(.dismissed)
+
+        fetch([commentedOn(thread)], into: session)
+
+        #expect(session.store.latestUpdates["1"] == .reasonForNotifying)
+    }
+
+    /// What the poller does with a fetch that changed something, in the order it
+    /// does it. Called rather than polled because the loop signing in has already
+    /// started is mid-fetch as often as not, and a test that races it is a test
+    /// that fails for a reason of its own.
+    private func fetch(_ threads: [NotificationThread], into session: AppSession) {
+        session.store.replaceAll(with: threads)
+        session.poller.onThreadsFetched?(threads)
+    }
+
+    private func commentedOn(_ thread: NotificationThread) -> NotificationThread {
+        Fixtures.thread(
+            id: thread.id,
+            reason: thread.reason,
+            updatedAt: secondUpdate,
+            latestCommentAPIURL: secondComment,
+        )
     }
 
     private func makeSession(

@@ -99,6 +99,7 @@ final class AppSession {
         poller = Poller(api: api, auth: auth, store: store, log: log)
 
         connectTypeFilter()
+        connectAlerts()
     }
 
     /// The one place the panel is told which types it may show, and it is told
@@ -158,7 +159,6 @@ final class AppSession {
 
         log.info("GitHub Notifications \(AppVersion.current) started.")
 
-        connectAlerts()
         notifier.installClickHandler()
 
         await notifier.requestAuthorization()
@@ -258,6 +258,10 @@ final class AppSession {
         await post(released)
     }
 
+    /// Wiring, not launch work, so it happens when the session is built rather
+    /// than in ``start()``: nothing can poll or be clicked before then, and the
+    /// launch path is skipped under tests, which used to leave the alert path
+    /// unreachable by any test at all.
     private func connectAlerts() {
         poller.onThreadsFetched = { [weak self] threads in
             self?.handleFetchedThreads(threads)
@@ -424,6 +428,14 @@ final class AppSession {
         } catch {
             rollBack(behaviour, of: thread, to: originalIndex)
             report(error, whileApplying: behaviour, to: thread)
+            return
+        }
+
+        // Only once GitHub has accepted it, so a refusal leaves the ledger as it
+        // found it along with the row. Forgetting on the way out would have the
+        // thread come back as news on the next poll, having never gone anywhere.
+        if behaviour.dismisses {
+            ledger.forget(thread.id)
         }
     }
 
@@ -435,8 +447,6 @@ final class AppSession {
             store.markRead(thread.id)
             return nil
         }
-
-        ledger.forget(thread.id)
 
         return store.removeThread(withIdentifier: thread.id)
     }
@@ -505,6 +515,7 @@ final class AppSession {
             do {
                 try await api.markThreadAsDone(threadIdentifier: thread.id, usingToken: token)
                 store.removeThread(withIdentifier: thread.id)
+                ledger.forget(thread.id)
             } catch {
                 lastActionFailure = "Stopped after \(offset) of \(threads.count). \(userFacingReason(for: error))"
                 log.warning(lastActionFailure ?? "")
