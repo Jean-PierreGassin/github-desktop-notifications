@@ -27,8 +27,18 @@ final class NotificationStore {
     /// alerts are gated on: a row and a banner are the same notification arriving
     /// in two places. Threads of any other type are held but never shown, so they
     /// raise no row, no count and no bulk action.
+    ///
+    /// The same list assigned again is not a change. It arrives whenever any alert
+    /// preference is saved, and regrouping for a follow-up setting would redraw
+    /// the panel to reach the same rows.
     var shownReasons: Set<NotificationReason> = Set(NotificationReason.allCases) {
-        didSet { regroup() }
+        didSet {
+            guard shownReasons != oldValue else {
+                return
+            }
+
+            regroup()
+        }
     }
 
     /// What last changed about each thread, shown on its row beside the reason.
