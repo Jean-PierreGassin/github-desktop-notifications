@@ -280,6 +280,13 @@ struct AppSessionTests {
         session.alertPreferences.select(.everything)
 
         await session.signIn(withToken: "ghp_valid")
+
+        // Signing in starts the polling loop, which these tests neither need nor
+        // want: it ticks every second for as long as the suite runs, and a fetch
+        // it wins the main actor for is a fetch some other suite's timing test
+        // waited out.
+        session.poller.stop()
+
         session.store.replaceAll(with: threads)
 
         return session
