@@ -13,18 +13,24 @@ final class SeenThreadLedger {
         let latestCommentAPIURL: URL?
         let update: ThreadUpdate?
 
+        /// When the thread was last in the inbox, so entries for threads that
+        /// have left it can be aged out rather than kept for ever.
+        let lastSeenAt: Date
+
         enum CodingKeys: String, CodingKey {
             case updatedAt
             case reason
             case latestCommentAPIURL
             case update
+            case lastSeenAt
         }
 
-        init(_ announcement: ThreadAnnouncement) {
+        init(_ announcement: ThreadAnnouncement, seenAt: Date) {
             updatedAt = announcement.thread.updatedAt
             reason = announcement.thread.reason
             latestCommentAPIURL = announcement.thread.subject.latestCommentAPIURL
             update = announcement.update
+            lastSeenAt = seenAt
         }
 
         /// A ledger written before alerts said what had changed holds a bare
@@ -38,6 +44,7 @@ final class SeenThreadLedger {
                 reason = nil
                 latestCommentAPIURL = nil
                 update = nil
+                lastSeenAt = updatedAt
                 return
             }
 
@@ -47,6 +54,7 @@ final class SeenThreadLedger {
             reason = try container.decodeIfPresent(NotificationReason.self, forKey: .reason)
             latestCommentAPIURL = try container.decodeIfPresent(URL.self, forKey: .latestCommentAPIURL)
             update = try container.decodeIfPresent(ThreadUpdate.self, forKey: .update)
+            lastSeenAt = try container.decodeIfPresent(Date.self, forKey: .lastSeenAt) ?? updatedAt
         }
     }
 
@@ -54,6 +62,12 @@ final class SeenThreadLedger {
         var hasBeenSeeded: Bool
         var lastAnnouncedUpdates: [String: AnnouncedState]
     }
+
+    /// How long a thread is remembered after it leaves the inbox, and how many
+    /// are remembered at once. Both exist only to bound the file: a thread is
+    /// normally forgotten because it went quiet, not because either was hit.
+    private static let retentionPeriod: TimeInterval = 30 * 24 * 60 * 60
+    private static let retentionLimit = 2000
 
     private let fileURL: URL
     private let log: AppLog
@@ -68,9 +82,12 @@ final class SeenThreadLedger {
         load()
     }
 
-    /// What last changed about each thread still in the inbox, keyed by thread,
-    /// for the panel to show beside the reason. A thread carried over from a
-    /// ledger written before changes were recorded has nothing to show yet.
+    /// What last changed about each thread, keyed by thread, for the panel to
+    /// show beside the reason. A thread carried over from a ledger written before
+    /// changes were recorded has nothing to show yet.
+    ///
+    /// Threads that have left the inbox are in here too. The panel looks rows up
+    /// by identifier, so entries it has no row for cost nothing.
     var latestUpdates: [String: ThreadUpdate] {
         lastAnnouncedUpdates.compactMapValues(\.update)
     }
@@ -80,6 +97,7 @@ final class SeenThreadLedger {
     ///
     /// The first run after signing in announces nothing: the whole inbox is
     /// already known to the user.
+    ///
     func selectThreadsToAnnounce(from threads: [NotificationThread]) -> [ThreadAnnouncement] {
         let announcements = threads.map { ThreadAnnouncement(thread: $0, update: update(for: $0)) }
 
@@ -97,6 +115,20 @@ final class SeenThreadLedger {
         lastAnnouncedUpdates = [:]
         hasBeenSeeded = false
         try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    /// Drops what is remembered about a thread the user has dismissed.
+    ///
+    /// Reading a notification and dismissing it are different statements. Read
+    /// means seen, so the thread is remembered and whatever happens next is
+    /// reported as what it is. Dismissed means done with, exactly as it does on
+    /// GitHub, so if the thread ever comes back it comes back as news.
+    func forget(_ identifier: String) {
+        guard lastAnnouncedUpdates.removeValue(forKey: identifier) != nil else {
+            return
+        }
+
+        save()
     }
 
     private func isWorthAnnouncing(_ thread: NotificationThread) -> Bool {
@@ -168,14 +200,44 @@ final class SeenThreadLedger {
         return reason.priorityRank <= previousReason.priorityRank
     }
 
-    /// Only threads still in the inbox are kept, so the file cannot grow forever.
+    /// Threads that have left the inbox are kept, and aged out rather than
+    /// dropped on sight.
+    ///
+    /// The inbox endpoint returns unread threads only, so reading a notification
+    /// takes it out of every fetch that follows. Forgetting it there and then
+    /// meant that anything happening on it afterwards - a comment, another
+    /// reviewer's approval - brought it back looking like a thread the app had
+    /// never seen, and announced it as the reason all over again. Reading a
+    /// notification is the most ordinary thing there is, and it was quietly
+    /// undoing every follow-up rule the user had set.
     private func record(_ announcements: [ThreadAnnouncement]) {
-        lastAnnouncedUpdates = Dictionary(
-            announcements.map { ($0.id, AnnouncedState($0)) },
-            uniquingKeysWith: { first, _ in first },
-        )
+        let now = Date()
 
+        for announcement in announcements {
+            lastAnnouncedUpdates[announcement.id] = AnnouncedState(announcement, seenAt: now)
+        }
+
+        forgetThreadsGoneQuiet(asOf: now)
         save()
+    }
+
+    /// Keeping threads past the inbox has to stop somewhere. A thread not seen
+    /// for a month is one the user dealt with long ago, and anything that
+    /// happens on it after that is worth hearing about as though it were new.
+    private func forgetThreadsGoneQuiet(asOf now: Date) {
+        lastAnnouncedUpdates = lastAnnouncedUpdates.filter { _, state in
+            now.timeIntervalSince(state.lastSeenAt) < Self.retentionPeriod
+        }
+
+        guard lastAnnouncedUpdates.count > Self.retentionLimit else {
+            return
+        }
+
+        let survivors = lastAnnouncedUpdates
+            .sorted { $0.value.lastSeenAt > $1.value.lastSeenAt }
+            .prefix(Self.retentionLimit)
+
+        lastAnnouncedUpdates = Dictionary(uniqueKeysWithValues: survivors.map { ($0.key, $0.value) })
     }
 
     private func load() {

@@ -436,6 +436,8 @@ final class AppSession {
             return nil
         }
 
+        ledger.forget(thread.id)
+
         return store.removeThread(withIdentifier: thread.id)
     }
 

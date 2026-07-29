@@ -131,30 +131,47 @@ struct SeenThreadLedgerTests {
         #expect(announced.map(\.update) == [.reasonForNotifying])
     }
 
-    /// Being asked again is a new ask, and has to interrupt however quiet the
-    /// thread had gone. This is the ordinary route: reviewing a pull request
-    /// marks its notification read, so it leaves the unread inbox and the ledger
-    /// forgets it. When the author pushes changes and asks you again, the thread
-    /// is new to the app - which is what a fresh ask is.
+    /// The hole this closes. Reading a notification takes it out of the unread
+    /// inbox and out of every fetch after it, so forgetting threads the moment
+    /// they left meant a comment days later brought one back looking like a
+    /// thread the app had never seen, and announced the reason all over again.
+    /// Reading a notification is the most ordinary thing there is, and it was
+    /// undoing every follow-up rule the user had set.
     @Test
-    func leadsWithTheAskWhenAReviewIsRequestedAgainAfterYouDealtWithIt() {
+    func remembersAThreadThatLeftTheInboxWhenItWasRead() {
         let ledger = makeLedger()
         _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
 
         _ = ledger.selectThreadsToAnnounce(from: [])
 
         let announced = ledger.selectThreadsToAnnounce(from: [
-            reviewRequest(updatedAt: secondUpdate, commentAPIURL: firstComment),
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment),
+        ])
+
+        #expect(announced.map(\.update) == [.comment])
+    }
+
+    /// Dismissing is not reading. It says done with, exactly as it does on
+    /// GitHub, so a thread that comes back after one is news again.
+    @Test
+    func announcesAThreadAgainAfterItWasDismissed() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        ledger.forget("a")
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment),
         ])
 
         #expect(announced.map(\.update) == [.reasonForNotifying])
     }
 
-    /// The same ask on a thread that never left the inbox. Reviewing makes you a
+    /// Being asked again after you have actually reviewed. Reviewing makes you a
     /// participant, so what follows is reasoned `subscribed` and goes quiet;
     /// being asked again escalates it straight back to the front.
     @Test
-    func leadsWithTheAskWhenAReviewIsRequestedAgainOnAThreadYouNowMerelyFollow() {
+    func leadsWithTheAskWhenAReviewIsRequestedAgainAfterYouReviewed() {
         let ledger = makeLedger()
         _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
         _ = ledger.selectThreadsToAnnounce(from: [
@@ -256,6 +273,30 @@ struct SeenThreadLedgerTests {
         #expect(announced.isEmpty)
     }
 
+    /// Remembering threads past the inbox has to stop somewhere, or the file
+    /// grows for as long as the app is installed.
+    @Test
+    func forgetsAThreadThatHasNotBeenInTheInboxForAMonth() throws {
+        let fileURL = temporaryFileURL()
+        let staleSeenAt = iso8601(Date().addingTimeInterval(-31 * 24 * 60 * 60))
+        let stored = "{\"hasBeenSeeded\":true,\"lastAnnouncedUpdates\":{\"a\":{"
+            + "\"updatedAt\":\"2023-11-14T22:13:20Z\",\"reason\":\"review_requested\","
+            + "\"update\":\"comment\",\"lastSeenAt\":\"\(staleSeenAt)\"}}}"
+
+        try stored.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let ledger = makeLedger(fileURL: fileURL)
+
+        // Any fetch prunes, so a thread returning after that is news again.
+        _ = ledger.selectThreadsToAnnounce(from: [])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            reviewRequest(updatedAt: secondUpdate, commentAPIURL: secondComment),
+        ])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
     @Test
     func startsFreshAfterBeingCleared() {
         let fileURL = temporaryFileURL()
@@ -292,6 +333,10 @@ struct SeenThreadLedgerTests {
 
     private func makeLedger(fileURL: URL? = nil) -> SeenThreadLedger {
         SeenThreadLedger(fileURL: fileURL ?? temporaryFileURL(), log: AppLog(subsystem: "tests"))
+    }
+
+    private func iso8601(_ date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
     }
 
     private func temporaryFileURL() -> URL {
