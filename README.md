@@ -30,11 +30,15 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 
 - **Real desktop notifications**, delivered by macOS, so Notification Centre, your sounds and your Focus rules all apply
   (on top of in-app customisation).
-- **Each notification says what changed**, so a comment on a pull request you were asked to review arrives as a comment,
-  not as another copy of the review request. Rows show both.
+- **Each notification says why it reached you and what changed**, in one line: "Review requested from you · New
+  comment". Never one without the other, so a banner can't leave you guessing whether it is a review you owe or a
+  repository you happen to watch. The row for that thread is worded from the same line, word for word.
 - **You pick how much follow-up is worth interrupting you**: everything, only new comments, or nothing after the first
   one. Pushes and CI runs stop getting a banner each, and you still get told when GitHub changes why a thread concerns
   you.
+- **A type you switch off is gone from the menu bar too**, not just silenced: no row, no unread count, no place in a
+  bulk action. Switch it back on and whatever is still in your GitHub inbox comes back. One picker keeps the old
+  behaviour if you would rather alert on little and read the rest at leisure.
 - **Rows show merged, closed and draft**, so you know a pull request is already done without opening it.
 - **Grouped by repository and ordered by urgency**, so review requests and mentions sit above other noise.
 - **Fifteen notification types you can switch individually**, or set presets if you would rather not.
@@ -52,12 +56,12 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 |                                          The menu bar panel                                           |                                               A notification                                               |
 |:-----------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------:|
 | <img src="assets/menu-bar-content.png" alt="The menu bar panel, grouped by repository" width="420" /> | <img src="assets/notification-banner.png" alt="A desktop notification for a review request" width="420" /> |
-|        Grouped by repository, unread marked, and what is left to read is always in the footer         |                          Says what happened, where, and takes you straight to it                           |
+|        Grouped by repository, unread marked, and what is left to read is always in the footer         |                    Says why it is yours, what happened and where, and takes you straight to it                    |
 
 |                                     Notifications                                      |                                     Work hours                                     |                                   General                                    |
 |:--------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------:|:----------------------------------------------------------------------------:|
 | <img src="assets/notification-settings.png" alt="Notification settings" width="290" /> | <img src="assets/work-hours-settings.png" alt="Work hours settings" width="290" /> | <img src="assets/general-settings.png" alt="General settings" width="290" /> |
-|               Fifteen types, on or off individually, with a live preview               |              Your hours, your days, and when held notifications land               |                 Login, panel size, updates and your account                  |
+|      Fifteen types, on or off individually for alerts and rows alike, with a live preview      |              Your hours, your days, and when held notifications land               |                 Login, panel size, updates and your account                  |
 
 ## Install
 

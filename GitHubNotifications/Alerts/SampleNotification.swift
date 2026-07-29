@@ -24,10 +24,12 @@ enum SampleNotification {
         ),
     )
 
-    /// Shown as a thread the user is hearing about for the first time, which is
-    /// what a review request arrives as.
+    /// Shown as a review you owe that has since been commented on, so the preview
+    /// carries the whole line a real alert can carry: why the thread is yours and
+    /// what has moved on it. A first-sighting sample would show the shorter half
+    /// and leave the longer one to arrive unrehearsed.
     static let announcement = ThreadAnnouncement(
         thread: SampleNotification.thread,
-        update: .reasonForNotifying,
+        update: .comment,
     )
 }

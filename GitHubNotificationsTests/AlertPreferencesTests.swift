@@ -152,14 +152,67 @@ struct AlertPreferencesTests {
         let preferences = AlertPreferences(defaults: defaults)
         preferences.setEnabled(true, for: .ciActivity)
         preferences.followUpAlerts = .everything
+        preferences.panelContents = .everything
 
         preferences.resetToDefaults()
 
         #expect(preferences.preset == .essential)
         #expect(preferences.followUpAlerts == .comments)
+        #expect(preferences.panelContents == .chosenTypes)
         #expect(!preferences.allowsAlert(for: .ciActivity))
         #expect(AlertPreferences(defaults: defaults).preset == .essential)
         #expect(AlertPreferences(defaults: defaults).followUpAlerts == .comments)
+        #expect(AlertPreferences(defaults: defaults).panelContents == .chosenTypes)
+    }
+
+    @Test
+    func showsOnlyTheTypesTheUserAskedForOutOfTheBox() {
+        let preferences = makePreferences()
+
+        #expect(preferences.panelContents == .chosenTypes)
+        #expect(preferences.shownReasons.contains(.reviewRequested))
+        #expect(!preferences.shownReasons.contains(.ciActivity))
+    }
+
+    @Test
+    func showsTheWholeInboxWhenAskedTo() {
+        let preferences = makePreferences()
+
+        preferences.panelContents = .everything
+
+        #expect(NotificationReason.allCases.allSatisfy(preferences.shownReasons.contains))
+        #expect(!preferences.allowsAlert(for: .ciActivity))
+    }
+
+    /// A reason with no name in this app has no checkbox either, so it cannot
+    /// have been switched off and must not be filtered away as though it had.
+    @Test(arguments: PanelContents.allCases)
+    func alwaysShowsAReasonItHasNoNameForYet(panelContents: PanelContents) {
+        let preferences = makePreferences()
+
+        preferences.panelContents = panelContents
+
+        #expect(preferences.shownReasons.contains(.unrecognised))
+    }
+
+    @Test
+    func tellsWhoeverIsListeningAsSoonAsWhatThePanelShowsChanges() {
+        let preferences = makePreferences()
+        var changeCount = 0
+        preferences.onShownReasonsChanged = { changeCount += 1 }
+
+        preferences.setEnabled(false, for: .mentioned)
+        preferences.panelContents = .everything
+
+        #expect(changeCount == 2)
+    }
+
+    @Test
+    func remembersWhatThePanelShowsAcrossLaunches() {
+        let defaults = makeDefaults()
+        AlertPreferences(defaults: defaults).panelContents = .everything
+
+        #expect(AlertPreferences(defaults: defaults).panelContents == .everything)
     }
 
     private func makePreferences() -> AlertPreferences {

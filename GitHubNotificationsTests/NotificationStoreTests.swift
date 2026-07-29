@@ -95,4 +95,72 @@ struct NotificationStoreTests {
 
         #expect(store.threads.map(\.id) == ["1", "2", "3"])
     }
+
+    @Test
+    func showsNothingOfATypeTheUserHasNotAskedFor() {
+        let store = Fixtures.store()
+        store.shownReasons = [.reviewRequested]
+
+        store.replaceAll(with: [
+            Fixtures.thread(id: "wanted", reason: .reviewRequested),
+            Fixtures.thread(id: "unwanted", reason: .assigned),
+        ])
+
+        #expect(store.threads.map(\.id) == ["wanted"])
+        #expect(store.unreadCount == 1)
+        #expect(store.groups.flatMap { $0.visibleThreads.map(\.id) } == ["wanted"])
+    }
+
+    /// The whole fetch is held rather than filtered away, so the answer changing
+    /// does not have to wait for GitHub to have news.
+    @Test
+    func bringsHiddenRowsBackWhenTheirTypeIsAskedForAgain() {
+        let store = Fixtures.store()
+        store.shownReasons = [.reviewRequested]
+        store.replaceAll(with: [
+            Fixtures.thread(id: "1", reason: .reviewRequested),
+            Fixtures.thread(id: "2", reason: .assigned),
+        ])
+
+        store.shownReasons = [.reviewRequested, .assigned]
+
+        #expect(store.threads.map(\.id).sorted() == ["1", "2"])
+    }
+
+    /// The row limit evicts read rows that no longer fit, and a row hidden by the
+    /// type filter must not be mistaken for one of them.
+    @Test
+    func doesNotThrowAwayAReadRowThatIsMerelyHidden() {
+        let store = Fixtures.store()
+        store.replaceAll(with: [
+            Fixtures.thread(id: "1", reason: .reviewRequested),
+            Fixtures.thread(id: "2", reason: .assigned),
+        ])
+        store.markRead("2")
+
+        store.shownReasons = [.reviewRequested]
+        store.shownReasons = [.reviewRequested, .assigned]
+
+        #expect(store.threads.map(\.id).sorted() == ["1", "2"])
+        #expect(store.threads.first { $0.id == "2" }?.isUnread == false)
+    }
+
+    /// The index a removal hands back is into the whole fetch, so a rollback
+    /// still puts the row where it was even with rows hidden above it.
+    @Test
+    func returnsARemovedRowToItsOwnPositionWithHiddenRowsAroundIt() {
+        let store = Fixtures.store()
+        let threads = [
+            Fixtures.thread(id: "hidden", reason: .ciActivity),
+            Fixtures.thread(id: "1", reason: .reviewRequested),
+            Fixtures.thread(id: "2", reason: .reviewRequested, updatedAt: Date(timeIntervalSince1970: 1)),
+        ]
+        store.shownReasons = [.reviewRequested]
+        store.replaceAll(with: threads)
+
+        let index = store.removeThread(withIdentifier: "1")
+        store.restore(threads[1], at: index ?? 0)
+
+        #expect(store.threads.map(\.id) == ["1", "2"])
+    }
 }

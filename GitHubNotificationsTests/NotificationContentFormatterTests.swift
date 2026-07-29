@@ -14,17 +14,28 @@ struct NotificationContentFormatterTests {
         #expect(content.body == "Fix token refresh")
     }
 
-    /// Without this the review request and every comment after it read the same,
-    /// which is what made repeat notifications look like duplicates.
+    /// A follow-up adds what changed to why the thread is yours rather than
+    /// replacing it. "New comment" on its own named neither the pull request the
+    /// user owed a review on nor the fact that they owed one.
     @Test
-    func saysWhatChangedRatherThanWhyOnAFollowUp() {
+    func saysWhyTheThreadIsYoursAndWhatChangedOnAFollowUp() {
         let content = NotificationContentFormatter.make(
             for: announcement(update: .comment),
             settings: NotificationContentSettings(),
         )
 
-        #expect(content.subtitle == "New comment")
+        #expect(content.subtitle == "Review requested from you · New comment")
         #expect(content.body == "Fix token refresh")
+    }
+
+    /// The alert and the row for one thread are worded from the same caption, so
+    /// a banner can never say something its row contradicts.
+    @Test(arguments: [ThreadUpdate.reasonForNotifying, .comment, .reviewComment, .otherActivity])
+    func saysExactlyWhatTheRowForTheSameThreadSays(update: ThreadUpdate) {
+        let announcement = announcement(update: update)
+        let content = NotificationContentFormatter.make(for: announcement, settings: NotificationContentSettings())
+
+        #expect(content.subtitle == announcement.caption)
     }
 
     @Test

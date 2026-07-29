@@ -89,11 +89,44 @@ enum FollowUpAlerts: String, Sendable, CaseIterable, Codable {
     }
 }
 
-/// Which notifications are allowed to interrupt the user: which types of thread,
-/// and how much of what happens on them afterwards.
+/// How much of the GitHub inbox the menu bar panel is a view of.
 ///
-/// Everything still shows in the panel; this only decides what raises a macOS
-/// alert.
+/// A type switched off used to be silent and still take a row, which is the
+/// worst of both: the setting looked as though it had not worked, and the panel
+/// filled with threads the user had already said they did not want.
+///
+/// Both answers are legitimate, which is why this is asked rather than assumed.
+/// Alerting on little and reading the rest at leisure is a real way to use the
+/// app, and so is wanting a type gone entirely.
+enum PanelContents: String, Sendable, CaseIterable, Codable {
+    case chosenTypes
+    case everything
+
+    var displayName: String {
+        switch self {
+        case .chosenTypes: "Only the types switched on below"
+        case .everything: "Everything in your GitHub inbox"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .chosenTypes:
+            "A type switched off takes no row, no count and no place in a bulk action. "
+                + "Switching it back on returns whatever is still in your inbox."
+        case .everything:
+            "Every thread GitHub puts in your inbox gets a row, including types you never want alerts for."
+        }
+    }
+}
+
+/// Which notifications the user wants: which types of thread reach them, which
+/// of those may interrupt, and how much of what happens afterwards is worth
+/// interrupting for.
+///
+/// The follow-up choice is about interrupting only. Every change to a thread the
+/// panel shows still reaches its row, because a row that says what last happened
+/// is the answer to an alert missed, held or never asked for.
 @MainActor
 @Observable
 final class AlertPreferences {
@@ -106,9 +139,15 @@ final class AlertPreferences {
     /// user, so they land in the panel and nowhere else.
     static let defaultFollowUpAlerts = FollowUpAlerts.comments
 
+    /// A type the user has switched off is one they have said they do not want,
+    /// and the panel takes them at their word. The other choice is one picker
+    /// away and the section says so.
+    static let defaultPanelContents = PanelContents.chosenTypes
+
     private static let presetKey = "alertPreset"
     private static let customReasonsKey = "customAlertReasons"
     private static let followUpAlertsKey = "followUpAlerts"
+    private static let panelContentsKey = "panelContents"
 
     private let defaults: UserDefaults
 
@@ -120,6 +159,16 @@ final class AlertPreferences {
         didSet { save() }
     }
 
+    var panelContents: PanelContents {
+        didSet { save() }
+    }
+
+    /// Called whenever what the panel may show changes, so it can be re-filtered
+    /// there and then. Polling is conditional and an unchanged inbox answers 304,
+    /// so waiting for the next fetch could leave a switched-off type on screen
+    /// until something unrelated happened.
+    var onShownReasonsChanged: (() -> Void)?
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -129,10 +178,25 @@ final class AlertPreferences {
         )
         followUpAlerts = defaults.string(forKey: Self.followUpAlertsKey)
             .flatMap(FollowUpAlerts.init(rawValue:)) ?? Self.defaultFollowUpAlerts
+        panelContents = defaults.string(forKey: Self.panelContentsKey)
+            .flatMap(PanelContents.init(rawValue:)) ?? Self.defaultPanelContents
     }
 
     var enabledReasons: Set<NotificationReason> {
         preset.reasons ?? customReasons
+    }
+
+    /// The types the panel is allowed to show.
+    ///
+    /// ``NotificationReason/unrecognised`` is always among them. It is not in the
+    /// settings list, so it cannot have been switched off, and dropping it would
+    /// hide a thread the user has no control to bring back the day GitHub adds a
+    /// reason this app has no name for yet.
+    var shownReasons: Set<NotificationReason> {
+        switch panelContents {
+        case .everything: Set(NotificationReason.allCases)
+        case .chosenTypes: enabledReasons.union([.unrecognised])
+        }
     }
 
     func allowsAlert(for reason: NotificationReason) -> Bool {
@@ -178,6 +242,7 @@ final class AlertPreferences {
         preset = Self.defaultPreset
         customReasons = []
         followUpAlerts = Self.defaultFollowUpAlerts
+        panelContents = Self.defaultPanelContents
         save()
     }
 
@@ -191,5 +256,8 @@ final class AlertPreferences {
         defaults.set(preset.rawValue, forKey: Self.presetKey)
         defaults.set(customReasons.map(\.rawValue), forKey: Self.customReasonsKey)
         defaults.set(followUpAlerts.rawValue, forKey: Self.followUpAlertsKey)
+        defaults.set(panelContents.rawValue, forKey: Self.panelContentsKey)
+
+        onShownReasonsChanged?()
     }
 }

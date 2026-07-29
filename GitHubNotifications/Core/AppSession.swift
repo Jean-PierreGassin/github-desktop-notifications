@@ -97,6 +97,23 @@ final class AppSession {
         updatePreferences = UpdatePreferences(defaults: defaults)
         updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
+
+        connectTypeFilter()
+    }
+
+    /// Keeps the panel showing what the user has asked it to show. Switching a
+    /// type off used to silence it and leave the row, which read as the setting
+    /// not having worked.
+    private func connectTypeFilter() {
+        store.shownReasons = alertPreferences.shownReasons
+
+        alertPreferences.onShownReasonsChanged = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            store.shownReasons = alertPreferences.shownReasons
+        }
     }
 
     var rowsPerRepository: Int {
@@ -388,9 +405,10 @@ final class AppSession {
             return
         }
 
-        let originalIndex = store.threads.firstIndex(where: { $0.id == thread.id })
-
-        applyLocally(behaviour, to: thread)
+        // The position comes back from the removal itself rather than being read
+        // off the visible rows beforehand: with types hidden, the two are not the
+        // same index, and a rollback has to use the one the store restores with.
+        let originalIndex = applyLocally(behaviour, to: thread)
 
         do {
             if behaviour.marksAsRead {
@@ -406,13 +424,16 @@ final class AppSession {
         }
     }
 
-    private func applyLocally(_ behaviour: ClickBehaviour, to thread: NotificationThread) {
+    /// Returns where a dismissed thread was, for putting it back if GitHub
+    /// refuses. Marking read leaves the row where it is, so there is nothing to
+    /// remember.
+    private func applyLocally(_ behaviour: ClickBehaviour, to thread: NotificationThread) -> Int? {
         guard behaviour.dismisses else {
             store.markRead(thread.id)
-            return
+            return nil
         }
 
-        store.removeThread(withIdentifier: thread.id)
+        return store.removeThread(withIdentifier: thread.id)
     }
 
     private func rollBack(_ behaviour: ClickBehaviour, of thread: NotificationThread, to index: Int?) {

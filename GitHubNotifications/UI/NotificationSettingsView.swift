@@ -54,7 +54,8 @@ struct NotificationSettingsView: View {
         } footer: {
             Text("\(session.alertPreferences.preset.summary) "
                 + "\(session.alertPreferences.followUpAlerts.summary) "
-                + "Everything still reaches the menu bar panel, which says what last happened. "
+                + "Follow-up only decides what interrupts you: every change to a type you have switched on still "
+                + "reaches its row in the menu bar panel, which says what last happened. "
                 + "Reset restores both, and the types below with them.")
                 .foregroundStyle(.secondary)
         }
@@ -66,6 +67,12 @@ struct NotificationSettingsView: View {
     /// own alignment instead of a nested stack's.
     private var notificationTypes: some View {
         Section {
+            Picker("Menu bar panel shows", selection: panelContentsBinding) {
+                ForEach(PanelContents.allCases, id: \.self) { contents in
+                    Text(contents.displayName).tag(contents)
+                }
+            }
+
             ForEach(NotificationGroup.allCases, id: \.self) { group in
                 Text(group.displayName)
                     .font(.caption)
@@ -81,6 +88,9 @@ struct NotificationSettingsView: View {
             }
         } header: {
             SettingsSectionHeader(title: "Notification types") { session.alertPreferences.resetToDefaults() }
+        } footer: {
+            Text("These decide which notifications reach you at all. \(session.alertPreferences.panelContents.summary)")
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -94,14 +104,14 @@ struct NotificationSettingsView: View {
 
             Toggle("Show the thread title", isOn: contentBinding(\.showsThreadTitle))
 
-            Toggle("Show what happened", isOn: contentBinding(\.showsNotificationType))
+            Toggle("Show why it reached you and what changed", isOn: contentBinding(\.showsNotificationType))
         } header: {
             SettingsSectionHeader(title: "Notification content") {
                 session.notificationContentPreferences.resetContent()
             }
         } footer: {
-            Text("What each notification says when macOS shows it. The first notification about a thread says why it "
-                + "reached you, and the ones after it say what changed. The menu bar panel is unaffected.")
+            Text("What each notification says when macOS shows it. Every notification names why the thread is yours, "
+                + "and adds what has changed on it since, in the same words as the row in the menu bar panel.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -257,6 +267,13 @@ struct NotificationSettingsView: View {
         Binding(
             get: { session.alertPreferences.preset },
             set: { session.alertPreferences.select($0) },
+        )
+    }
+
+    private var panelContentsBinding: Binding<PanelContents> {
+        Binding(
+            get: { session.alertPreferences.panelContents },
+            set: { session.alertPreferences.panelContents = $0 },
         )
     }
 
