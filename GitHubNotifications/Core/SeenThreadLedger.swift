@@ -97,7 +97,6 @@ final class SeenThreadLedger {
     ///
     /// The first run after signing in announces nothing: the whole inbox is
     /// already known to the user.
-    ///
     func selectThreadsToAnnounce(from threads: [NotificationThread]) -> [ThreadAnnouncement] {
         let announcements = threads.map { ThreadAnnouncement(thread: $0, update: update(for: $0)) }
 

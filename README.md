@@ -60,12 +60,12 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 |                                          The menu bar panel                                           |                                               A notification                                               |
 |:-----------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------:|
 | <img src="assets/menu-bar-content.png" alt="The menu bar panel, grouped by repository" width="420" /> | <img src="assets/notification-banner.png" alt="A desktop notification for a review request" width="420" /> |
-|        Grouped by repository, unread marked, and what is left to read is always in the footer         |                    Says why it is yours, what happened and where, and takes you straight to it                    |
+|        Grouped by repository, unread marked, and what is left to read is always in the footer         |                Says why it is yours, what happened and where, and takes you straight to it                 |
 
 |                                     Notifications                                      |                                     Work hours                                     |                                   General                                    |
 |:--------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------:|:----------------------------------------------------------------------------:|
 | <img src="assets/notification-settings.png" alt="Notification settings" width="290" /> | <img src="assets/work-hours-settings.png" alt="Work hours settings" width="290" /> | <img src="assets/general-settings.png" alt="General settings" width="290" /> |
-|      Fifteen types, on or off individually for alerts and rows alike, with a live preview      |              Your hours, your days, and when held notifications land               |                 Login, panel size, updates and your account                  |
+|  Fifteen types, on or off individually for alerts and rows alike, with a live preview  |              Your hours, your days, and when held notifications land               |                 Login, panel size, updates and your account                  |
 
 ## Install
 
