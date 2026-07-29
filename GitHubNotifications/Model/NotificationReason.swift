@@ -128,6 +128,30 @@ enum NotificationReason: String, Sendable, CaseIterable, Codable {
         }
     }
 
+    /// Whether a thread that reached you for this reason is yours, in the sense
+    /// that what happens on it next is still your business.
+    ///
+    /// Being asked to review a pull request makes the request yours. It does not
+    /// make the approvals, the pushes and the other reviewers' comments that
+    /// follow yours: you were asked for one thing, and you either do it or you
+    /// don't. A thread you opened, were assigned, were named on or joined in on
+    /// is the opposite, and what happens next on it is the whole point of it.
+    ///
+    /// This does not silence anything for good. GitHub re-reasons a thread when
+    /// it starts concerning you differently - a review request becomes a mention
+    /// the moment someone writes your name on it - and a changed reason is news
+    /// under every follow-up setting there is.
+    var makesTheThreadYours: Bool {
+        switch self {
+        case .author, .assigned, .mentioned, .comment, .manual:
+            true
+        case .reviewRequested, .approvalRequested, .teamMentioned, .invitation, .securityAlert,
+             .securityAdvisoryCredit, .subscribed, .stateChange, .ciActivity, .memberFeatureRequested,
+             .unrecognised:
+            false
+        }
+    }
+
     var group: NotificationGroup {
         switch self {
         case .reviewRequested, .approvalRequested, .assigned, .mentioned, .teamMentioned,

@@ -33,9 +33,9 @@ struct NotificationSettingsView: View {
         .font(.callout)
     }
 
-    /// Two pickers because there are two decisions, and reason alone cannot make
-    /// the second: which threads are allowed to interrupt, and how much of what
-    /// happens on them afterwards is worth interrupting for.
+    /// Three pickers because there are three decisions, and none of them can make
+    /// another: which threads may interrupt at all, what has to happen on one
+    /// before it interrupts again, and whose threads that second rule applies to.
     private var alerts: some View {
         Section {
             Picker("Notify me about", selection: presetBinding) {
@@ -49,14 +49,23 @@ struct NotificationSettingsView: View {
                     Text(followUp.displayName).tag(followUp)
                 }
             }
+
+            Picker("Follow up on", selection: followUpThreadsBinding) {
+                ForEach(FollowUpThreads.allCases, id: \.self) { threads in
+                    Text(threads.displayName).tag(threads)
+                }
+            }
+            .disabled(session.alertPreferences.followUpAlerts == .nothing)
+            .padding(.leading, Self.dependentIndent)
         } header: {
             SettingsSectionHeader(title: "Alerts") { session.alertPreferences.resetToDefaults() }
         } footer: {
             Text("\(session.alertPreferences.preset.summary) "
                 + "\(session.alertPreferences.followUpAlerts.summary) "
+                + "\(session.alertPreferences.followUpThreads.summary) "
                 + "Follow-up only decides what interrupts you: every change to a type you have switched on still "
                 + "reaches its row in the menu bar panel, which says what last happened. "
-                + "Reset restores both, and the types below with them.")
+                + "Reset restores all three, and the types below with them.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -281,6 +290,13 @@ struct NotificationSettingsView: View {
         Binding(
             get: { session.alertPreferences.followUpAlerts },
             set: { session.alertPreferences.followUpAlerts = $0 },
+        )
+    }
+
+    private var followUpThreadsBinding: Binding<FollowUpThreads> {
+        Binding(
+            get: { session.alertPreferences.followUpThreads },
+            set: { session.alertPreferences.followUpThreads = $0 },
         )
     }
 

@@ -50,8 +50,9 @@ enum AlertPreset: String, Sendable, CaseIterable, Codable {
 /// therefore cannot separate the request from the fortnight of activity after
 /// it, and a busy thread goes on alerting for as long as it stays busy.
 ///
-/// This is the other half of that choice. Not which threads may interrupt, but
-/// which changes to them are worth it.
+/// This is one half of the answer: not which threads may interrupt, but which
+/// changes to them are worth it. ``FollowUpThreads`` is the other half, and says
+/// whose threads this applies to at all.
 enum FollowUpAlerts: String, Sendable, CaseIterable, Codable {
     case everything
     case comments
@@ -67,7 +68,7 @@ enum FollowUpAlerts: String, Sendable, CaseIterable, Codable {
 
     var summary: String {
         switch self {
-        case .everything: "Every change to a thread you have already heard about."
+        case .everything: "Comments, reviews, merges and pushes alike."
         case .comments: "Replies and review comments, but not pushes, checks or merges."
         case .nothing: "Only the first alert about a thread, and any time GitHub changes why it concerns you."
         }
@@ -85,6 +86,46 @@ enum FollowUpAlerts: String, Sendable, CaseIterable, Codable {
         case .everything: [.reasonForNotifying, .comment, .reviewComment, .otherActivity]
         case .comments: [.reasonForNotifying, .comment, .reviewComment]
         case .nothing: [.reasonForNotifying]
+        }
+    }
+}
+
+/// Which threads keep alerting after the first time.
+///
+/// This is the half of the follow-up question that GitHub's reason can answer
+/// and a change on its own cannot. "Someone commented" is the same event whether
+/// it lands on a pull request you opened or on one you were asked to review a
+/// fortnight ago, and only one of those is still your business.
+///
+/// Neither choice can silence a thread for good: GitHub re-reasons a thread when
+/// it starts concerning you differently, and a changed reason is news under
+/// every follow-up setting there is. Being mentioned on a review you were only
+/// asked for is exactly that case.
+enum FollowUpThreads: String, Sendable, CaseIterable, Codable {
+    case yours
+    case everyThread
+
+    var displayName: String {
+        switch self {
+        case .yours: "Threads that are yours"
+        case .everyThread: "Every thread you alert on"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .yours:
+            "Threads you opened, were assigned, were named on, or joined in on. A pull request you were only asked "
+                + "to review alerts on the request and then goes quiet, until someone mentions you on it."
+        case .everyThread:
+            "Any thread whose type you alert on, however it came to you."
+        }
+    }
+
+    func includes(_ reason: NotificationReason) -> Bool {
+        switch self {
+        case .everyThread: true
+        case .yours: reason.makesTheThreadYours
         }
     }
 }
@@ -134,10 +175,18 @@ final class AlertPreferences {
     /// initialiser and by the reset control in Settings.
     static let defaultPreset = AlertPreset.essential
 
-    /// Comments are the follow-up worth hearing about. Pushes, checks and merges
-    /// are the bulk of what happens on a thread and the least of what needs the
-    /// user, so they land in the panel and nowhere else.
-    static let defaultFollowUpAlerts = FollowUpAlerts.comments
+    /// On a thread that is the user's, everything that happens to it is worth
+    /// hearing: a review submitted with no comment on it, a merge, a close. These
+    /// used to be held back because they were the bulk of what happened on a
+    /// thread, but that bulk was mostly other people's business on other people's
+    /// pull requests, and ``defaultFollowUpThreads`` is what stops it now.
+    static let defaultFollowUpAlerts = FollowUpAlerts.everything
+
+    /// Being asked to review something is not the same as being party to it.
+    /// Every reviewer's approval and every reply on a pull request you owe one
+    /// review on is the single loudest thing GitHub sends, and none of it needs
+    /// you until someone says your name.
+    static let defaultFollowUpThreads = FollowUpThreads.yours
 
     /// A type the user has switched off is one they have said they do not want,
     /// and the panel takes them at their word. The other choice is one picker
@@ -147,6 +196,7 @@ final class AlertPreferences {
     private static let presetKey = "alertPreset"
     private static let customReasonsKey = "customAlertReasons"
     private static let followUpAlertsKey = "followUpAlerts"
+    private static let followUpThreadsKey = "followUpThreads"
     private static let panelContentsKey = "panelContents"
 
     private let defaults: UserDefaults
@@ -156,6 +206,10 @@ final class AlertPreferences {
     private(set) var preset: AlertPreset
 
     var followUpAlerts: FollowUpAlerts {
+        didSet { save() }
+    }
+
+    var followUpThreads: FollowUpThreads {
         didSet { save() }
     }
 
@@ -178,6 +232,8 @@ final class AlertPreferences {
         )
         followUpAlerts = defaults.string(forKey: Self.followUpAlertsKey)
             .flatMap(FollowUpAlerts.init(rawValue:)) ?? Self.defaultFollowUpAlerts
+        followUpThreads = defaults.string(forKey: Self.followUpThreadsKey)
+            .flatMap(FollowUpThreads.init(rawValue:)) ?? Self.defaultFollowUpThreads
         panelContents = defaults.string(forKey: Self.panelContentsKey)
             .flatMap(PanelContents.init(rawValue:)) ?? Self.defaultPanelContents
     }
@@ -203,8 +259,21 @@ final class AlertPreferences {
         enabledReasons.contains(reason)
     }
 
-    func allowsAlert(about update: ThreadUpdate) -> Bool {
-        followUpAlerts.updates.contains(update)
+    /// Whether this change, on a thread that reached the user for this reason, has
+    /// earned an alert of its own.
+    ///
+    /// ``ThreadUpdate/reasonForNotifying`` is never a follow-up and is never
+    /// filtered here. It means the thread is new to the user, or that GitHub has
+    /// re-reasoned it because it now concerns them differently, and that second
+    /// case is the whole escape hatch: a pull request you were only asked to
+    /// review goes quiet, and comes straight back the moment it becomes a
+    /// mention.
+    func allowsAlert(about update: ThreadUpdate, on reason: NotificationReason) -> Bool {
+        guard update != .reasonForNotifying else {
+            return true
+        }
+
+        return followUpAlerts.updates.contains(update) && followUpThreads.includes(reason)
     }
 
     func isEnabled(_ reason: NotificationReason) -> Bool {
@@ -242,6 +311,7 @@ final class AlertPreferences {
         preset = Self.defaultPreset
         customReasons = []
         followUpAlerts = Self.defaultFollowUpAlerts
+        followUpThreads = Self.defaultFollowUpThreads
         panelContents = Self.defaultPanelContents
         save()
     }
@@ -256,6 +326,7 @@ final class AlertPreferences {
         defaults.set(preset.rawValue, forKey: Self.presetKey)
         defaults.set(customReasons.map(\.rawValue), forKey: Self.customReasonsKey)
         defaults.set(followUpAlerts.rawValue, forKey: Self.followUpAlertsKey)
+        defaults.set(followUpThreads.rawValue, forKey: Self.followUpThreadsKey)
         defaults.set(panelContents.rawValue, forKey: Self.panelContentsKey)
 
         onShownReasonsChanged?()

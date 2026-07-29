@@ -33,9 +33,13 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 - **Each notification says why it reached you and what changed**, in one line: "Review requested from you · New
   comment". Never one without the other, so a banner can't leave you guessing whether it is a review you owe or a
   repository you happen to watch. The row for that thread is worded from the same line, word for word.
+- **Follow-ups only on threads that are yours**, by default. Everything that happens on a pull request you opened or
+  were assigned reaches you — comments, reviews, merges. A pull request you were only *asked to review* alerts on the
+  request and then goes quiet, instead of banner-per-approval for a fortnight while five other people work through it.
+- **Being mentioned always gets through.** GitHub re-reasons a thread when it starts concerning you differently, so the
+  moment someone writes your name on that quiet review request, it is news again. Nothing is silenced for good.
 - **You pick how much follow-up is worth interrupting you**: everything, only new comments, or nothing after the first
-  one. Pushes and CI runs stop getting a banner each, and you still get told when GitHub changes why a thread concerns
-  you.
+  one — and whether that applies to your threads or every thread you alert on.
 - **A type you switch off is gone from the menu bar too**, not just silenced: no row, no unread count, no place in a
   bulk action. Switch it back on and whatever is still in your GitHub inbox comes back. One picker keeps the old
   behaviour if you would rather alert on little and read the rest at leisure.

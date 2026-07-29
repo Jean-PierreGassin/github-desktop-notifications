@@ -302,11 +302,12 @@ final class AppSession {
 
     /// Two questions rather than one: whether this kind of thread may interrupt
     /// at all, and whether this particular change to it has earned an alert of
-    /// its own. The second is what keeps a pull request from alerting on every
-    /// push and green tick for as long as it is open.
+    /// its own. The second reads the reason as well as the change, because what
+    /// happened is only half of whether it needs you - the other half is whose
+    /// thread it happened on.
     private func isWorthInterruptingFor(_ announcement: ThreadAnnouncement) -> Bool {
         alertPreferences.allowsAlert(for: announcement.thread.reason)
-            && alertPreferences.allowsAlert(about: announcement.update)
+            && alertPreferences.allowsAlert(about: announcement.update, on: announcement.thread.reason)
     }
 
     private func post(_ announcements: [ThreadAnnouncement]) async {

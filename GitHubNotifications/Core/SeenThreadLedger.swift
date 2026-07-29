@@ -128,7 +128,7 @@ final class SeenThreadLedger {
             return lastAnnouncedUpdate.update ?? .reasonForNotifying
         }
 
-        guard lastAnnouncedUpdate.reason == thread.reason else {
+        if isNews(thread.reason, replacing: lastAnnouncedUpdate.reason) {
             return .reasonForNotifying
         }
 
@@ -140,6 +140,32 @@ final class SeenThreadLedger {
         }
 
         return commentUpdate
+    }
+
+    /// Whether GitHub changing why a thread concerns the user is itself the news.
+    ///
+    /// An escalation is: a repository you watch turns into a pull request you
+    /// have been asked to review, a review request turns into a mention. A
+    /// fall-back is not. Once someone has mentioned you on a thread you are a
+    /// participant in it, so the notifications after that arrive as `subscribed`,
+    /// and counting that as news would hand every thread the user has quietened
+    /// a way back in through the one door left open for mentions.
+    ///
+    /// The fall-back is not swallowed, only demoted: it goes on to be read as
+    /// whatever actually changed, and answers to the follow-up settings like any
+    /// other activity.
+    private func isNews(_ reason: NotificationReason, replacing previousReason: NotificationReason?) -> Bool {
+        // A ledger written before reasons were recorded knows nothing of this
+        // thread's history, so its reason has not been said yet.
+        guard let previousReason else {
+            return true
+        }
+
+        guard previousReason != reason else {
+            return false
+        }
+
+        return reason.priorityRank <= previousReason.priorityRank
     }
 
     /// Only threads still in the inbox are kept, so the file cannot grow forever.

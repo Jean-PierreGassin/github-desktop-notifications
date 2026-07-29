@@ -92,12 +92,59 @@ struct AlertPreferencesTests {
         #expect(AlertPreferences(defaults: defaults).preset == .everything)
     }
 
-    @Test
-    func holdsBackPushesAndChecksOutOfTheBox() {
+    /// The complaint this was built for: someone else commenting on, or
+    /// approving, a pull request you were only asked to review is the loudest
+    /// thing GitHub sends and the least of what needs you.
+    @Test(arguments: [ThreadUpdate.comment, .reviewComment, .otherActivity])
+    func staysQuietOnAPullRequestYouWereOnlyAskedToReview(update: ThreadUpdate) {
+        #expect(!makePreferences().allowsAlert(about: update, on: .reviewRequested))
+    }
+
+    /// The other half of the same complaint: your own pull request is exactly
+    /// what you want to hear about. A review submitted with no comment on it
+    /// arrives as plain activity, so comments alone would have missed it.
+    @Test(arguments: [ThreadUpdate.comment, .reviewComment, .otherActivity])
+    func speaksUpOnYourOwnPullRequest(update: ThreadUpdate) {
+        #expect(makePreferences().allowsAlert(about: update, on: .author))
+    }
+
+    @Test(arguments: [
+        (NotificationReason.author, true),
+        (.assigned, true),
+        (.mentioned, true),
+        (.comment, true),
+        (.manual, true),
+        (.reviewRequested, false),
+        (.approvalRequested, false),
+        (.teamMentioned, false),
+        (.subscribed, false),
+        (.stateChange, false),
+        (.ciActivity, false),
+        (.unrecognised, false),
+    ])
+    func followsUpOnlyOnThreadsThatAreYoursOutOfTheBox(reason: NotificationReason, isAllowed: Bool) {
         let preferences = makePreferences()
 
-        #expect(preferences.followUpAlerts == .comments)
-        #expect(!preferences.allowsAlert(about: .otherActivity))
+        #expect(preferences.followUpThreads == .yours)
+        #expect(preferences.allowsAlert(about: .comment, on: reason) == isAllowed)
+    }
+
+    @Test
+    func followsUpOnEveryThreadWhenAskedTo() {
+        let preferences = makePreferences()
+
+        preferences.followUpThreads = .everyThread
+
+        #expect(preferences.allowsAlert(about: .comment, on: .reviewRequested))
+        #expect(preferences.allowsAlert(about: .otherActivity, on: .subscribed))
+    }
+
+    @Test
+    func hearsEverythingThatHappensOnYourOwnThreadsOutOfTheBox() {
+        let preferences = makePreferences()
+
+        #expect(preferences.followUpAlerts == .everything)
+        #expect(preferences.allowsAlert(about: .otherActivity, on: .author))
     }
 
     @Test(arguments: [
@@ -119,18 +166,40 @@ struct AlertPreferencesTests {
         let preferences = makePreferences()
         preferences.followUpAlerts = followUpAlerts
 
-        #expect(preferences.allowsAlert(about: update) == isAllowed)
+        #expect(preferences.allowsAlert(about: update, on: .author) == isAllowed)
     }
 
     /// The guarantee that makes the quieter choices safe to pick: a thread the
     /// user has not heard about, or one GitHub has re-reasoned because it now
-    /// concerns them more directly, always gets through.
+    /// concerns them differently, always gets through. Without it, "threads that
+    /// are yours" would mean a review request could never reach you at all.
     @Test(arguments: FollowUpAlerts.allCases)
     func neverSilencesAThreadWhoseReasonIsItselfTheNews(followUpAlerts: FollowUpAlerts) {
         let preferences = makePreferences()
         preferences.followUpAlerts = followUpAlerts
+        preferences.followUpThreads = .yours
 
-        #expect(preferences.allowsAlert(about: .reasonForNotifying))
+        #expect(preferences.allowsAlert(about: .reasonForNotifying, on: .reviewRequested))
+        #expect(preferences.allowsAlert(about: .reasonForNotifying, on: .subscribed))
+    }
+
+    /// GitHub re-reasons a thread when it starts concerning you differently, so
+    /// being mentioned on a review you had gone quiet on comes through as the
+    /// reason being the news rather than as another comment.
+    @Test
+    func letsAMentionThroughOnAThreadThatHadGoneQuiet() {
+        let preferences = makePreferences()
+
+        #expect(!preferences.allowsAlert(about: .comment, on: .reviewRequested))
+        #expect(preferences.allowsAlert(about: .reasonForNotifying, on: .mentioned))
+    }
+
+    @Test
+    func remembersWhichThreadsToFollowUpOnAcrossLaunches() {
+        let defaults = makeDefaults()
+        AlertPreferences(defaults: defaults).followUpThreads = .everyThread
+
+        #expect(AlertPreferences(defaults: defaults).followUpThreads == .everyThread)
     }
 
     @Test
@@ -139,6 +208,14 @@ struct AlertPreferencesTests {
         AlertPreferences(defaults: defaults).followUpAlerts = .nothing
 
         #expect(AlertPreferences(defaults: defaults).followUpAlerts == .nothing)
+    }
+
+    /// A reason with no name in this app is not assumed to be the user's, so a
+    /// type GitHub adds tomorrow announces itself once rather than following up
+    /// on activity nobody has decided is worth it.
+    @Test
+    func doesNotTreatAReasonItHasNoNameForAsYours() {
+        #expect(!NotificationReason.unrecognised.makesTheThreadYours)
     }
 
     @Test
@@ -151,17 +228,20 @@ struct AlertPreferencesTests {
         let defaults = makeDefaults()
         let preferences = AlertPreferences(defaults: defaults)
         preferences.setEnabled(true, for: .ciActivity)
-        preferences.followUpAlerts = .everything
+        preferences.followUpAlerts = .nothing
+        preferences.followUpThreads = .everyThread
         preferences.panelContents = .everything
 
         preferences.resetToDefaults()
 
         #expect(preferences.preset == .essential)
-        #expect(preferences.followUpAlerts == .comments)
+        #expect(preferences.followUpAlerts == .everything)
+        #expect(preferences.followUpThreads == .yours)
         #expect(preferences.panelContents == .chosenTypes)
         #expect(!preferences.allowsAlert(for: .ciActivity))
         #expect(AlertPreferences(defaults: defaults).preset == .essential)
-        #expect(AlertPreferences(defaults: defaults).followUpAlerts == .comments)
+        #expect(AlertPreferences(defaults: defaults).followUpAlerts == .everything)
+        #expect(AlertPreferences(defaults: defaults).followUpThreads == .yours)
         #expect(AlertPreferences(defaults: defaults).panelContents == .chosenTypes)
     }
 

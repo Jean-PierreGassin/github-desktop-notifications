@@ -109,6 +109,49 @@ struct SeenThreadLedgerTests {
         #expect(announced.map(\.update) == [.reasonForNotifying])
     }
 
+    /// The one door left open for a thread the user has quietened, so it has to
+    /// stay a door rather than becoming a gap: a review request that becomes a
+    /// mention is news, and is what makes "follow up on threads that are yours"
+    /// safe to have as the default.
+    @Test
+    func leadsWithTheReasonWhenAReviewRequestBecomesAMention() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [reviewRequest(commentAPIURL: firstComment)])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            Fixtures.thread(
+                id: "a",
+                reason: .mentioned,
+                updatedAt: secondUpdate,
+                latestCommentAPIURL: secondComment,
+            ),
+        ])
+
+        #expect(announced.map(\.update) == [.reasonForNotifying])
+    }
+
+    /// Once you have been mentioned you are a participant, so GitHub reasons the
+    /// notifications after that as `subscribed`. Counting a fall-back as news
+    /// would let every quietened thread back in through the mention door.
+    @Test
+    func doesNotLeadWithTheReasonWhenGitHubFallsBackToAQuieterOne() {
+        let ledger = makeLedger()
+        _ = ledger.selectThreadsToAnnounce(from: [
+            Fixtures.thread(id: "a", reason: .mentioned, latestCommentAPIURL: firstComment),
+        ])
+
+        let announced = ledger.selectThreadsToAnnounce(from: [
+            Fixtures.thread(
+                id: "a",
+                reason: .subscribed,
+                updatedAt: secondUpdate,
+                latestCommentAPIURL: secondComment,
+            ),
+        ])
+
+        #expect(announced.map(\.update) == [.comment])
+    }
+
     @Test
     func recordsTheLatestChangeAgainstEachThreadForThePanel() {
         let ledger = makeLedger()
