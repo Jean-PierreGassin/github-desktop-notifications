@@ -41,6 +41,23 @@ final class NotificationStore {
         }
     }
 
+    /// The owners the user has switched off on this machine, folded to lower case
+    /// as ``OwnerPreferences`` keeps them.
+    ///
+    /// A muted owner's threads are held but never shown, exactly as a switched-off
+    /// type is. Someone who does not want work on this Mac does not want a work
+    /// row on it either, and a row nobody was told about is the same mistake
+    /// whichever setting hid the alert.
+    var mutedOwners: Set<String> = [] {
+        didSet {
+            guard mutedOwners != oldValue else {
+                return
+            }
+
+            regroup()
+        }
+    }
+
     /// What last changed about each thread, shown on its row beside the reason.
     /// It is handed over by the session rather than worked out here, because the
     /// only thing that knows what a thread looked like before this fetch is the
@@ -160,8 +177,17 @@ final class NotificationStore {
         readLedger.clear()
     }
 
+    /// Whether the user asked to see this thread at all: its type is one they
+    /// alert on, and it came from an owner they have not switched off. The two
+    /// are one question - whether this notification concerns them on this machine
+    /// - so they are answered in one place rather than at every filtering site.
+    private func isShown(_ thread: NotificationThread) -> Bool {
+        shownReasons.contains(thread.reason)
+            && !mutedOwners.contains(thread.repository.owner.login.lowercased())
+    }
+
     private func regroup() {
-        threads = fetchedThreads.filter { shownReasons.contains($0.reason) }
+        threads = fetchedThreads.filter(isShown)
         groups = makeGroups()
 
         evictOverflowingReadThreads()
@@ -171,12 +197,12 @@ final class NotificationStore {
     /// than kept out of sight, so the ledger cannot grow without bound even if
     /// reconciliation never runs.
     ///
-    /// A thread held back only by the type filter is not overflow. It is counted
-    /// as kept, so switching its type on again brings the row back rather than
+    /// A thread held back by a filter is not overflow. It is counted as kept, so
+    /// switching its type or its owner back on brings the row back rather than
     /// finding it has been quietly thrown away.
     private func evictOverflowingReadThreads() {
         let keptIdentifiers = Set(groups.flatMap { $0.visibleThreads.map(\.id) })
-            .union(fetchedThreads.filter { !shownReasons.contains($0.reason) }.map(\.id))
+            .union(fetchedThreads.filter { !isShown($0) }.map(\.id))
         let strandedIdentifiers = readLedger.identifiers.subtracting(keptIdentifiers)
 
         guard !strandedIdentifiers.isEmpty else {
@@ -185,7 +211,7 @@ final class NotificationStore {
 
         strandedIdentifiers.forEach(readLedger.forget)
         fetchedThreads.removeAll { strandedIdentifiers.contains($0.id) }
-        threads = fetchedThreads.filter { shownReasons.contains($0.reason) }
+        threads = fetchedThreads.filter(isShown)
         groups = makeGroups()
     }
 

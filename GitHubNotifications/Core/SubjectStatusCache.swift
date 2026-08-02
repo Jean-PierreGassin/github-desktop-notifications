@@ -50,6 +50,15 @@ final class SubjectStatusCache {
         return statuses[thread.id]
     }
 
+    /// Whether every fetch started so far has landed.
+    ///
+    /// Nothing on screen has a use for this - a row asks and takes whatever is
+    /// there. Tests wait on it rather than pausing for a fixed moment and hoping
+    /// it was long enough, which is a bet on how busy the machine is.
+    var hasSettled: Bool {
+        inFlight.isEmpty
+    }
+
     /// Signing out must not leave the next account looking at the last one's
     /// pull requests.
     func clear() {

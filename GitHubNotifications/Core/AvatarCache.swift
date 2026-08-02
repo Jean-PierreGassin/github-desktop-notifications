@@ -44,6 +44,15 @@ final class AvatarCache {
         return nil
     }
 
+    /// Whether every fetch started so far has landed.
+    ///
+    /// Nothing on screen has a use for this - a row asks and draws whatever is
+    /// there. Tests wait on it rather than pausing for a fixed moment and hoping
+    /// it was long enough, which is a bet on how busy the machine is.
+    var hasSettled: Bool {
+        inFlight.isEmpty
+    }
+
     private func fetch(_ owner: RepositoryOwner) {
         guard let avatarURL = owner.avatarURL, !inFlight.contains(owner.login) else {
             return

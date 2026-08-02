@@ -20,6 +20,8 @@ struct NotificationSettingsView: View {
 
                 notificationTypes
 
+                owners
+
                 notificationContent
 
                 behaviour
@@ -95,6 +97,32 @@ struct NotificationSettingsView: View {
             Text("These decide which notifications reach you at all, as banners and as rows alike. A type switched "
                 + "off raises no alert and takes no row, no unread count and no place in a bulk action. Switching it "
                 + "back on returns whatever is still in your GitHub inbox.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The list is what has arrived rather than what GitHub says an account
+    /// belongs to, so it starts empty and fills in. Saying so is the whole empty
+    /// state: an empty box under a heading reads as broken, and the answer is
+    /// simply to wait for the first notification.
+    private var owners: some View {
+        Section {
+            if session.ownerPreferences.listedOwners.isEmpty {
+                Text("Nobody yet. Every organisation and person whose repositories notify you appears here.")
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(session.ownerPreferences.listedOwners, id: \.self) { owner in
+                Toggle(owner, isOn: ownerBinding(for: owner))
+                    .toggleStyle(.checkbox)
+                    .help("Notifications from \(owner)'s repositories")
+            }
+        } header: {
+            SettingsSectionHeader(title: "Organisations") { session.ownerPreferences.resetToDefaults() }
+        } footer: {
+            Text("Which accounts' notifications you want on this Mac, your own among them. Switching one off is the "
+                + "same as switching a type off above: no banner, no row, no unread count. It is not unsubscribing - "
+                + "GitHub still has the notification, and another Mac signed in to the same account still gets it.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -293,6 +321,15 @@ struct NotificationSettingsView: View {
         Binding(
             get: { session.alertPreferences.isEnabled(reason) },
             set: { session.alertPreferences.setEnabled($0, for: reason) },
+        )
+    }
+
+    /// Switched on means notifications arrive, so the checkbox reads the way the
+    /// rest of the page does. Muting is what gets stored.
+    private func ownerBinding(for login: String) -> Binding<Bool> {
+        Binding(
+            get: { !session.ownerPreferences.isMuted(login) },
+            set: { session.ownerPreferences.setMuted(!$0, for: login) },
         )
     }
 
