@@ -15,7 +15,7 @@ struct SubjectStatusCacheTests {
 
         #expect(cache.status(for: pullRequest) == nil)
 
-        try await settle()
+        try await settle(cache)
 
         #expect(cache.status(for: pullRequest) == .merged)
     }
@@ -26,9 +26,9 @@ struct SubjectStatusCacheTests {
         let cache = await makeCache(api: api)
         _ = cache.status(for: pullRequest)
 
-        try await settle()
+        try await settle(cache)
         _ = cache.status(for: pullRequest)
-        try await settle()
+        try await settle(cache)
 
         #expect(api.subjectStatusURLs.count == 1)
     }
@@ -41,9 +41,9 @@ struct SubjectStatusCacheTests {
         let cache = await makeCache(api: api)
         _ = cache.status(for: pullRequest)
 
-        try await settle()
+        try await settle(cache)
         _ = cache.status(for: Fixtures.thread(id: "a", updatedAt: .now, subjectType: .pullRequest))
-        try await settle()
+        try await settle(cache)
 
         #expect(api.subjectStatusURLs.count == 2)
     }
@@ -57,7 +57,7 @@ struct SubjectStatusCacheTests {
         let cache = await makeCache(api: api)
         _ = cache.status(for: pullRequest)
 
-        try await settle()
+        try await settle(cache)
 
         #expect(cache.status(for: Fixtures.thread(id: "a", updatedAt: .now, subjectType: .pullRequest)) == .draft)
     }
@@ -69,7 +69,7 @@ struct SubjectStatusCacheTests {
 
         _ = cache.status(for: Fixtures.thread(id: "a", subjectType: subjectType))
 
-        try await settle()
+        try await settle(cache)
 
         #expect(api.subjectStatusURLs.isEmpty)
     }
@@ -82,7 +82,7 @@ struct SubjectStatusCacheTests {
 
         _ = cache.status(for: pullRequest)
 
-        try await settle()
+        try await settle(cache)
 
         #expect(cache.status(for: pullRequest) == nil)
     }
@@ -96,9 +96,9 @@ struct SubjectStatusCacheTests {
         let cache = await makeCache(api: api)
         _ = cache.status(for: pullRequest)
 
-        try await settle()
+        try await settle(cache)
         _ = cache.status(for: pullRequest)
-        try await settle()
+        try await settle(cache)
 
         #expect(api.subjectStatusURLs.count == 1)
     }
@@ -110,7 +110,7 @@ struct SubjectStatusCacheTests {
         let cache = await makeCache(api: api)
         _ = cache.status(for: pullRequest)
 
-        try await settle()
+        try await settle(cache)
         cache.clear()
 
         #expect(cache.status(for: pullRequest) == nil)
@@ -125,7 +125,9 @@ struct SubjectStatusCacheTests {
         return SubjectStatusCache(api: api, auth: auth, log: log)
     }
 
-    private func settle() async throws {
-        try await Task.sleep(for: .milliseconds(100))
+    /// The cache fills in behind a background fetch, so every test here waits
+    /// for that fetch to land rather than for a fixed moment to pass.
+    private func settle(_ cache: SubjectStatusCache) async throws {
+        try await waitUntil { cache.hasSettled }
     }
 }

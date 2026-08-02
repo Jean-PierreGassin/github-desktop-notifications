@@ -17,7 +17,7 @@ struct AvatarCacheTests {
 
         #expect(cache.image(for: Self.owner) == nil)
 
-        try await waitForFetch()
+        try await settle(cache)
 
         #expect(cache.image(for: Self.owner) != nil)
     }
@@ -30,7 +30,7 @@ struct AvatarCacheTests {
         let cache = makeCache(directory: directory, session: session)
         _ = cache.image(for: Self.owner)
 
-        try await waitForFetch()
+        try await settle(cache)
 
         StubAvatarProtocol.receivedRequests = []
         let afterRelaunch = makeCache(directory: directory, session: session)
@@ -47,7 +47,7 @@ struct AvatarCacheTests {
         let cache = makeCache(directory: Fixtures.temporaryDirectory(), session: session)
         _ = cache.image(for: Self.owner)
 
-        try await waitForFetch()
+        try await settle(cache)
 
         #expect(StubAvatarProtocol.receivedRequests.first?.url?.query == "s=64")
     }
@@ -60,7 +60,7 @@ struct AvatarCacheTests {
 
         _ = cache.image(for: Self.owner)
 
-        try await waitForFetch()
+        try await settle(cache)
 
         #expect(cache.image(for: Self.owner) == nil)
     }
@@ -79,7 +79,9 @@ struct AvatarCacheTests {
         AvatarCache(directory: directory, session: session, log: AppLog(subsystem: "tests"))
     }
 
-    private func waitForFetch() async throws {
-        try await Task.sleep(for: .milliseconds(200))
+    /// The cache fills in behind a background fetch, so every test here waits
+    /// for that fetch to land rather than for a fixed moment to pass.
+    private func settle(_ cache: AvatarCache) async throws {
+        try await waitUntil { cache.hasSettled }
     }
 }
