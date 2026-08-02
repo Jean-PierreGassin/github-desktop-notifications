@@ -145,6 +145,59 @@ struct NotificationStoreTests {
         #expect(store.threads.first { $0.id == "2" }?.isUnread == false)
     }
 
+    @Test
+    func showsNothingFromAnOwnerTheUserHasSwitchedOff() {
+        let store = Fixtures.store()
+        store.mutedOwners = ["acme"]
+
+        store.replaceAll(with: [
+            Fixtures.thread(id: "work", repository: Fixtures.repository(fullName: "acme/api")),
+            Fixtures.thread(id: "personal", repository: Fixtures.repository(id: 2, fullName: "jp/dotfiles")),
+        ])
+
+        #expect(store.threads.map(\.id) == ["personal"])
+        #expect(store.unreadCount == 1)
+        #expect(store.groups.flatMap { $0.visibleThreads.map(\.id) } == ["personal"])
+    }
+
+    /// GitHub spells an owner however they registered, and the muted set is folded
+    /// to lower case, so the two only meet if the store folds as well.
+    @Test
+    func matchesAMutedOwnerWhateverCaseGitHubUses() {
+        let store = Fixtures.store()
+        store.mutedOwners = ["acme"]
+
+        store.replaceAll(with: [Fixtures.thread(id: "1", repository: Fixtures.repository(fullName: "ACME/api"))])
+
+        #expect(store.threads.isEmpty)
+    }
+
+    @Test
+    func bringsHiddenRowsBackWhenTheirOwnerIsSwitchedOnAgain() {
+        let store = Fixtures.store()
+        store.mutedOwners = ["acme"]
+        store.replaceAll(with: [Fixtures.thread(id: "1", repository: Fixtures.repository(fullName: "acme/api"))])
+
+        store.mutedOwners = []
+
+        #expect(store.threads.map(\.id) == ["1"])
+    }
+
+    /// The row limit evicts read rows that no longer fit, and a row hidden by the
+    /// owner filter must not be mistaken for one of them.
+    @Test
+    func doesNotThrowAwayAReadRowWhoseOwnerIsMerelyMuted() {
+        let store = Fixtures.store()
+        store.replaceAll(with: [Fixtures.thread(id: "1", repository: Fixtures.repository(fullName: "acme/api"))])
+        store.markRead("1")
+
+        store.mutedOwners = ["acme"]
+        store.mutedOwners = []
+
+        #expect(store.threads.map(\.id) == ["1"])
+        #expect(store.threads.first?.isUnread == false)
+    }
+
     /// The index a removal hands back is into the whole fetch, so a rollback
     /// still puts the row where it was even with rows hidden above it.
     @Test

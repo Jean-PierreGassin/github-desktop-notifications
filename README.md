@@ -43,6 +43,10 @@ backend, no account, no telemetry. Completely free, customisable, and notifies y
 - **Banners and rows are one list, not two.** You never get a notification that isn't waiting in the menu bar, and
   never a row for something you were never told about. A type you switch off is gone from both — no alert, no row, no
   unread count, no place in a bulk action — and switching it back on returns whatever is still in your GitHub inbox.
+- **One account, one machine at a time.** Switch off the organisations you don't want *on this Mac*: work off at home,
+  personal off at work. It is a per-machine setting, not an account one, so the other Mac still gets everything and
+  GitHub still has the lot either way. The list fills in with each organisation and person that notifies you, all on
+  until you say otherwise.
 - **Rows show merged, closed and draft**, so you know a pull request is already done without opening it.
 - **Grouped by repository and ordered by urgency**, so review requests and mentions sit above other noise.
 - **Fifteen notification types you can switch individually**, or set presets if you would rather not.

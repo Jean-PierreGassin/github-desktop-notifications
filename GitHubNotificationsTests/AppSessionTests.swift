@@ -174,6 +174,54 @@ struct AppSessionTests {
         #expect(shown == alerted)
     }
 
+    /// The setting someone reaches for on a personal Mac: work off, everything
+    /// else untouched, as a banner and as a row alike.
+    @Test
+    func aMutedOwnerRaisesNeitherAnAlertNorARow() async {
+        let session = await makeSession(threads: [
+            Fixtures.thread(id: "work", repository: Fixtures.repository(fullName: "acme/api")),
+            Fixtures.thread(id: "personal", repository: Fixtures.repository(id: 2, fullName: "jp/dotfiles")),
+        ])
+
+        session.ownerPreferences.setMuted(true, for: "acme")
+
+        #expect(session.store.threads.map(\.id) == ["personal"])
+        #expect(!session.isWorthInterruptingFor(announcement(from: "acme")))
+        #expect(session.isWorthInterruptingFor(announcement(from: "jp")))
+    }
+
+    /// A muted owner's rows are hidden rather than dropped, so switching the owner
+    /// back on brings them back without waiting for GitHub to have news.
+    @Test
+    func bringsAnOwnerBackAsSoonAsTheyAreSwitchedOnAgain() async {
+        let session = await makeSession(threads: [
+            Fixtures.thread(id: "work", repository: Fixtures.repository(fullName: "acme/api")),
+        ])
+        session.ownerPreferences.setMuted(true, for: "acme")
+
+        #expect(session.store.threads.isEmpty)
+
+        session.ownerPreferences.setMuted(false, for: "acme")
+
+        #expect(session.store.threads.map(\.id) == ["work"])
+    }
+
+    /// The panel says how many rows the button will clear, and the button has to
+    /// mean it, whichever filter is hiding the rest.
+    @Test
+    func leavesAMutedOwnerOutOfABulkDismiss() async {
+        let api = FakeGitHubAPI()
+        let session = await makeSession(api: api, threads: [
+            Fixtures.thread(id: "work", repository: Fixtures.repository(fullName: "acme/api")),
+            Fixtures.thread(id: "personal", repository: Fixtures.repository(id: 2, fullName: "jp/dotfiles")),
+        ])
+        session.ownerPreferences.setMuted(true, for: "acme")
+
+        await session.applyToEverything(.dismissed)
+
+        #expect(api.markedAsDone == ["personal"])
+    }
+
     /// Polling is conditional, so an unchanged inbox answers 304 and the panel is
     /// never handed a fresh list. Switching a type back on has to bring its rows
     /// back on the spot rather than whenever GitHub next has news.
@@ -255,6 +303,12 @@ struct AppSessionTests {
             reason: thread.reason,
             updatedAt: secondUpdate,
             latestCommentAPIURL: secondComment,
+        )
+    }
+
+    private func announcement(from owner: String) -> ThreadAnnouncement {
+        Fixtures.announcement(
+            thread: Fixtures.thread(repository: Fixtures.repository(fullName: "\(owner)/api")),
         )
     }
 

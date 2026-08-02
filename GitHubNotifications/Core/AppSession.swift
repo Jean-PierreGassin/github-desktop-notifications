@@ -13,6 +13,7 @@ final class AppSession {
     let poller: Poller
     let notifier: Notifier
     let alertPreferences: AlertPreferences
+    let ownerPreferences: OwnerPreferences
     let notificationContentPreferences: NotificationContentPreferences
     let workHoursPreferences: WorkHoursPreferences
     let behaviourPreferences: BehaviourPreferences
@@ -90,6 +91,7 @@ final class AppSession {
         )
         notifier = Notifier(log: log)
         alertPreferences = AlertPreferences(defaults: defaults)
+        ownerPreferences = OwnerPreferences(defaults: defaults)
         notificationContentPreferences = NotificationContentPreferences(defaults: defaults)
         workHoursPreferences = WorkHoursPreferences(defaults: defaults)
         behaviourPreferences = BehaviourPreferences(defaults: defaults)
@@ -102,16 +104,17 @@ final class AppSession {
         updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
         poller = Poller(api: api, auth: auth, store: store, log: log)
 
-        connectTypeFilter()
+        connectVisibilityFilters()
     }
 
-    /// The one place the panel is told which types it may show, and it is told
-    /// the same list the alerts are gated on. A banner and a row are the same
-    /// notification arriving twice, so they answer to one setting: a type
-    /// switched off used to be silenced and still take a row, which read as the
-    /// setting not having worked.
-    private func connectTypeFilter() {
+    /// The one place the panel is told what it may show, and it is told exactly
+    /// what the alerts are gated on: which types, and which owners. A banner and
+    /// a row are the same notification arriving twice, so they answer to one
+    /// setting each - a type switched off used to be silenced and still take a
+    /// row, which read as the setting not having worked.
+    private func connectVisibilityFilters() {
         store.shownReasons = alertPreferences.allowedReasons
+        store.mutedOwners = ownerPreferences.mutedOwnerKeys
 
         alertPreferences.onAllowedReasonsChanged = { [weak self] in
             guard let self else {
@@ -119,6 +122,14 @@ final class AppSession {
             }
 
             store.shownReasons = alertPreferences.allowedReasons
+        }
+
+        ownerPreferences.onMutedOwnersChanged = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            store.mutedOwners = ownerPreferences.mutedOwnerKeys
         }
     }
 
@@ -282,6 +293,10 @@ final class AppSession {
     private func handleFetchedThreads(_ threads: [NotificationThread]) {
         let announcements = ledger.selectThreadsToAnnounce(from: threads)
 
+        // Before anything is filtered, so an owner someone wants to switch off is
+        // on the page whether or not their notifications got as far as a row.
+        ownerPreferences.rememberOwners(of: threads)
+
         store.showLatestUpdates(ledger.latestUpdates)
         announce(announcements)
     }
@@ -306,13 +321,18 @@ final class AppSession {
         Task { await post(alertable) }
     }
 
-    /// Two questions rather than one: whether this kind of thread may interrupt
-    /// at all, and whether this particular change to it has earned an alert of
-    /// its own. The second reads the reason as well as the change, because what
-    /// happened is only half of whether it needs you - the other half is whose
-    /// thread it happened on.
-    private func isWorthInterruptingFor(_ announcement: ThreadAnnouncement) -> Bool {
-        alertPreferences.allowsAlert(for: announcement.thread.reason)
+    /// Three questions rather than one: whether this machine wants anything from
+    /// the owner it came from, whether this kind of thread may interrupt at all,
+    /// and whether this particular change to it has earned an alert of its own.
+    /// The last reads the reason as well as the change, because what happened is
+    /// only half of whether it needs you - the other half is whose thread it
+    /// happened on.
+    ///
+    /// Not private, so the suite can check the gate itself rather than infer it
+    /// from what reached the notification centre.
+    func isWorthInterruptingFor(_ announcement: ThreadAnnouncement) -> Bool {
+        ownerPreferences.allowsAlert(from: announcement.thread.repository.owner.login)
+            && alertPreferences.allowsAlert(for: announcement.thread.reason)
             && alertPreferences.allowsAlert(about: announcement.update, on: announcement.thread.reason)
     }
 
@@ -383,6 +403,7 @@ final class AppSession {
         ledger.clear()
         heldAlerts.clear()
         subjectStatuses.clear()
+        ownerPreferences.forgetKnownOwners()
         auth.signOut()
     }
 
