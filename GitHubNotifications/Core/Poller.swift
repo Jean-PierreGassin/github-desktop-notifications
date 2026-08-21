@@ -16,6 +16,7 @@ final class Poller {
     private let auth: AuthService
     private let store: NotificationStore
     private let log: AppLog
+    private let prepareThreadsForDisplay: ([NotificationThread]) -> [NotificationThread]
 
     private var loop: Task<Void, Never>?
     private var lastModified: String?
@@ -35,11 +36,13 @@ final class Poller {
         auth: AuthService,
         store: NotificationStore,
         log: AppLog,
+        prepareThreadsForDisplay: @escaping ([NotificationThread]) -> [NotificationThread] = { $0 },
     ) {
         self.api = api
         self.auth = auth
         self.store = store
         self.log = log
+        self.prepareThreadsForDisplay = prepareThreadsForDisplay
     }
 
     var nextPollDueAt: Date {
@@ -112,7 +115,7 @@ final class Poller {
             }
 
             lastModified = response.lastModified
-            store.replaceAll(with: response.threads)
+            store.replaceAll(with: prepareThreadsForDisplay(response.threads))
             log.info("Fetched \(response.threads.count) notifications.")
             onThreadsFetched?(response.threads)
         } catch let error as GitHubError {

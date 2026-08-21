@@ -48,6 +48,10 @@ final class AppSession {
     private let readLedger: ReadThreadLedger
     private let defaults: UserDefaults
 
+    #if DEBUG
+    private let debugInbox: DebugInbox
+    #endif
+
     private var heldAlertLoop: Task<Void, Never>?
     private var reconciliationLoop: Task<Void, Never>?
 
@@ -81,6 +85,11 @@ final class AppSession {
         self.api = api
         self.defaults = defaults
 
+        #if DEBUG
+        let debugInbox = DebugInbox()
+        self.debugInbox = debugInbox
+        #endif
+
         let storedRowsPerRepository = defaults.integer(forKey: Self.rowsPerRepositoryKey)
 
         auth = AuthService(api: api, storage: storage, log: log)
@@ -102,7 +111,19 @@ final class AppSession {
         subjectStatuses = SubjectStatusCache(api: api, auth: auth, log: log)
         updatePreferences = UpdatePreferences(defaults: defaults)
         updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
-        poller = Poller(api: api, auth: auth, store: store, log: log)
+        poller = Poller(
+            api: api,
+            auth: auth,
+            store: store,
+            log: log,
+            prepareThreadsForDisplay: { threads in
+                #if DEBUG
+                debugInbox.merge(with: threads)
+                #else
+                threads
+                #endif
+            },
+        )
 
         connectVisibilityFilters()
     }
@@ -180,6 +201,10 @@ final class AppSession {
         await auth.restoreSession()
 
         if auth.isSignedIn {
+            #if DEBUG
+            store.replaceAll(with: debugInbox.threads)
+            #endif
+
             poller.start()
             askForClickBehaviourIfNeeded()
             await reconcileReadThreads()
@@ -433,6 +458,14 @@ final class AppSession {
             return
         }
 
+        #if DEBUG
+        if debugInbox.contains(thread) {
+            applyLocally(behaviour, to: thread)
+            debugInbox.apply(behaviour, to: thread)
+            return
+        }
+        #endif
+
         // The position comes back from the removal itself rather than being read
         // off the visible rows beforehand: with types hidden, the two are not the
         // same index, and a rollback has to use the one the store restores with.
@@ -497,7 +530,19 @@ final class AppSession {
         }
 
         if behaviour.marksAsRead {
+            #if DEBUG
+            let hasGitHubThreads = store.threads.contains { !debugInbox.contains($0) }
+
+            if hasGitHubThreads {
+                await markEverythingAsRead(usingToken: token, keepingRows: !behaviour.dismisses)
+            } else if !behaviour.dismisses {
+                store.threads.map(\.id).forEach(store.markRead)
+            }
+
+            debugInbox.markAllRead()
+            #else
             await markEverythingAsRead(usingToken: token, keepingRows: !behaviour.dismisses)
+            #endif
         }
 
         guard behaviour.dismisses else {
@@ -534,7 +579,16 @@ final class AppSession {
             bulkProgress = "Dismissing \(offset + 1) of \(threads.count)"
 
             do {
+                #if DEBUG
+                if debugInbox.contains(thread) {
+                    debugInbox.apply(.dismissed, to: thread)
+                } else {
+                    try await api.markThreadAsDone(threadIdentifier: thread.id, usingToken: token)
+                }
+                #else
                 try await api.markThreadAsDone(threadIdentifier: thread.id, usingToken: token)
+                #endif
+
                 store.removeThread(withIdentifier: thread.id)
                 ledger.forget(thread.id)
             } catch {
