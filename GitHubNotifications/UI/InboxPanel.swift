@@ -15,7 +15,6 @@ struct InboxPanel: View {
     @Environment(\.openWindow) private var openWindow
 
     @State private var now = Date()
-    @State private var isConfirmingBulkAction = false
     @State private var listHeight: CGFloat = 0
 
     var body: some View {
@@ -249,27 +248,31 @@ struct InboxPanel: View {
     private var bulkButton: some View {
         let behaviour = session.behaviourPreferences.clickBehaviour
 
-        return Button(behaviour.bulkActionTitle) {
-            guard behaviour.needsBulkConfirmation else {
-                Task { await session.applyToEverything(behaviour) }
-                return
-            }
-
-            isConfirmingBulkAction = true
-        }
+        return Button(behaviour.bulkActionTitle) { applyToEverything(behaviour) }
         .appButton(behaviour.needsBulkConfirmation ? .destructive : .standard)
         .disabled(session.bulkProgress != nil)
-        .confirmationDialog(
-            "\(behaviour.bulkActionTitle)?",
-            isPresented: $isConfirmingBulkAction,
-        ) {
-            Button(behaviour.bulkActionTitle, role: .destructive) {
-                Task { await session.applyToEverything(behaviour) }
-            }
-        } message: {
-            Text("This clears \(session.store.threads.count) notifications from GitHub on every device, "
-                + "and cannot be undone from here.")
+    }
+
+    private func applyToEverything(_ behaviour: ClickBehaviour) {
+        guard behaviour.needsBulkConfirmation else {
+            Task { await session.applyToEverything(behaviour) }
+            return
         }
+
+        let alert = NSAlert()
+        alert.messageText = "\(behaviour.bulkActionTitle)?"
+        alert.informativeText = "This clears \(session.store.threads.count) notifications from GitHub on every "
+            + "device, and cannot be undone from here."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: behaviour.bulkActionTitle).hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return
+        }
+
+        Task { await session.applyToEverything(behaviour) }
     }
 
     /// What happens next rather than what happened last: with no refresh button
