@@ -40,6 +40,9 @@ struct NotificationRowView: View {
             }
         }
         .help(hoverDescription)
+        .accessibilityAction(named: Text(rowBehaviour.actionTitle)) {
+            onApply(rowBehaviour)
+        }
         .contextMenu {
             Button("Open in browser", action: onOpen)
 

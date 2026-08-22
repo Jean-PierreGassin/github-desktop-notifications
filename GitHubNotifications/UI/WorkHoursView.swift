@@ -37,10 +37,18 @@ struct WorkHoursView: View {
 
             if hours.usesSameHoursEveryDay {
                 HStack(spacing: 8) {
-                    TimeField(label: "From", minutes: sharedBinding(\.startMinutes))
+                    TimeField(
+                        label: "From",
+                        accessibilityLabel: "Work hours start time",
+                        minutes: sharedBinding(\.startMinutes),
+                    )
                         .disabled(!hours.isEnabled)
 
-                    TimeField(label: "to", minutes: sharedBinding(\.endMinutes))
+                    TimeField(
+                        label: "to",
+                        accessibilityLabel: "Work hours end time",
+                        minutes: sharedBinding(\.endMinutes),
+                    )
                         .disabled(!hours.isEnabled)
 
                     if let note = note(for: hours.sharedSchedule) {
@@ -99,13 +107,21 @@ struct WorkHoursView: View {
                 }
                 .toggleStyle(.checkbox)
 
-                TimeField(label: nil, minutes: dayBinding(for: weekday, keyPath: \.startMinutes))
+                TimeField(
+                    label: nil,
+                    accessibilityLabel: "\(Self.weekdayNames[weekday - 1]) start time",
+                    minutes: dayBinding(for: weekday, keyPath: \.startMinutes),
+                )
                     .disabled(!isDayEnabled(weekday))
 
                 Text("to")
                     .foregroundStyle(.secondary)
 
-                TimeField(label: nil, minutes: dayBinding(for: weekday, keyPath: \.endMinutes))
+                TimeField(
+                    label: nil,
+                    accessibilityLabel: "\(Self.weekdayNames[weekday - 1]) end time",
+                    minutes: dayBinding(for: weekday, keyPath: \.endMinutes),
+                )
                     .disabled(!isDayEnabled(weekday))
 
                 if isDayEnabled(weekday), let note = note(for: hours.schedule(for: weekday)) {
@@ -129,7 +145,11 @@ struct WorkHoursView: View {
                 .labelsHidden()
 
                 if hours.heldDelivery == .atSetTime {
-                    TimeField(label: "Deliver at", minutes: binding(\.deliveryMinutes))
+                    TimeField(
+                        label: "Deliver at",
+                        accessibilityLabel: "Held notification delivery time",
+                        minutes: binding(\.deliveryMinutes),
+                    )
 
                     if !hours.isDeliveryTimeWithinHours {
                         warning("That time falls outside every working day you have set, so held notifications will "
@@ -189,6 +209,8 @@ struct WorkHoursView: View {
                 .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Self.weekdayNames[weekday - 1])
+        .accessibilityValue(isActive ? "Selected" : "Not selected")
         .help(Self.weekdayNames[weekday - 1])
     }
 

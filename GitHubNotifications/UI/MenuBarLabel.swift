@@ -18,6 +18,8 @@ struct MenuBarLabel: View {
 
     var body: some View {
         Image(nsImage: icon)
+            .accessibilityLabel("GitHub Notifications")
+            .accessibilityValue(hasUnread ? "Unread notifications" : "No unread notifications")
             .task { await session.start() }
             .onReceive(Timer.publish(every: Self.pulseInterval, on: .main, in: .common).autoconnect()) { _ in
                 pulse()
