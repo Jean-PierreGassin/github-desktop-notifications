@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Test
+        run: ./scripts/test.sh
+
       # A tag carrying a suffix (v1.2.0-beta.1) publishes as a pre-release, so it
       # never becomes the release the updater offers to everyone.
       - name: Derive version from tag
@@ -71,10 +74,9 @@ jobs:
             -S apple-tool:,apple:,codesign: \
             -s -k "${KEYCHAIN_PASSWORD}" signing.keychain >/dev/null
 
-      - name: Test and build
+      - name: Build
         run: |
-          ./scripts/test.sh release \
-            CODE_SIGN_IDENTITY="${SIGNING_IDENTITY}" \
+          ./scripts/build.sh release \
             MARKETING_VERSION=${{ steps.version.outputs.number }} \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build }}
 
