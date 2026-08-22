@@ -18,7 +18,10 @@ jobs:
       SIGNING_IDENTITY: GitHub Notifications Signing
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Test
+        run: ./scripts/test.sh
 
       # A tag carrying a suffix (v1.2.0-beta.1) publishes as a pre-release, so it
       # never becomes the release the updater offers to everyone.

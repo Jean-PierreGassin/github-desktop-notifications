@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 # Runs the unit test suite.
 #
 # Usage: scripts/test.sh

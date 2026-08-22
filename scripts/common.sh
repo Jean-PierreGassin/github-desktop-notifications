@@ -5,8 +5,6 @@
 # shells, direnv) make xcodebuild link with the wrong linker and SDK, so they are
 # stripped before every invocation.
 
-set -euo pipefail
-
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="${PROJECT_ROOT}/GitHubNotifications.xcodeproj"
 SCHEME="GitHubNotifications"

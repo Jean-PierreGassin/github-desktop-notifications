@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 # Builds GitHubNotifications.app into build/Build/Products/<configuration>/.
 #
 # Signs with SIGNING_IDENTITY when it is set, so a fresh clone still builds
@@ -9,13 +11,18 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-CONFIGURATION="Debug"
+case "${1:-debug}" in
+  debug) CONFIGURATION="Debug" ;;
+  release) CONFIGURATION="Release" ;;
+  *)
+    echo "usage: scripts/build.sh [debug|release] [extra xcodebuild settings...]" >&2
+    exit 2
+    ;;
+esac
 
-if [[ "${1:-debug}" == "release" ]]; then
-  CONFIGURATION="Release"
+if (( $# > 0 )); then
+  shift
 fi
-
-shift || true
 
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
   set -- "CODE_SIGN_IDENTITY=${SIGNING_IDENTITY}" "$@"
