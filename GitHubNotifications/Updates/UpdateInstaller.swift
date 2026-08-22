@@ -156,22 +156,24 @@ struct UpdateInstaller: UpdateInstalling {
         let script = """
         #!/bin/bash
         set -u
-        exec >>"\(shellPath(logURL))" 2>&1
+        exec >>"$1" 2>&1
 
-        while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done
+        while kill -0 "$2" 2>/dev/null; do sleep 0.2; done
 
-        BACKUP="\(installedPath).backup"
+        INSTALLED="$3"
+        BUNDLE="$4"
+        BACKUP="${INSTALLED}.backup"
         rm -rf "$BACKUP"
-        mv "\(installedPath)" "$BACKUP" || exit 1
+        mv "$INSTALLED" "$BACKUP" || exit 1
 
-        if ! ditto "\(shellPath(bundleURL))" "\(installedPath)"; then
-          rm -rf "\(installedPath)"
-          mv "$BACKUP" "\(installedPath)"
+        if ! ditto "$BUNDLE" "$INSTALLED"; then
+          rm -rf "$INSTALLED"
+          mv "$BACKUP" "$INSTALLED"
           exit 1
         fi
 
         rm -rf "$BACKUP"
-        \(relaunching ? "open \"\(installedPath)\"" : "")
+        if [[ "$5" == "1" ]]; then open "$INSTALLED"; fi
         """
 
         do {
@@ -180,7 +182,14 @@ struct UpdateInstaller: UpdateInstalling {
 
             let installation = Process()
             installation.executableURL = URL(filePath: "/bin/bash")
-            installation.arguments = [shellPath(scriptURL)]
+            installation.arguments = [
+                shellPath(scriptURL),
+                shellPath(logURL),
+                String(ProcessInfo.processInfo.processIdentifier),
+                installedPath,
+                shellPath(bundleURL),
+                relaunching ? "1" : "0",
+            ]
             try installation.run()
         } catch {
             throw UpdateFailure.swapFailed(error.localizedDescription)

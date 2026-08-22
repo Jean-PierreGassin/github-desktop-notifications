@@ -16,6 +16,7 @@ final class FakeGitHubAPI: GitHubAPI, @unchecked Sendable {
     var entireInboxResult: Result<[NotificationThread], GitHubError> = .success([])
     var markThreadResult: Result<Void, GitHubError> = .success(())
     var subjectStatusResult: Result<SubjectStatus, GitHubError> = .success(.open)
+    var subjectStatusDelay: Duration?
 
     private(set) var fetchCount = 0
     private(set) var entireInboxFetchCount = 0
@@ -60,6 +61,10 @@ final class FakeGitHubAPI: GitHubAPI, @unchecked Sendable {
 
     func fetchSubjectStatus(at subjectURL: URL, usingToken token: String) async throws -> SubjectStatus {
         subjectStatusURLs.append(subjectURL)
+
+        if let subjectStatusDelay {
+            try await Task.sleep(for: subjectStatusDelay)
+        }
 
         return try subjectStatusResult.get()
     }

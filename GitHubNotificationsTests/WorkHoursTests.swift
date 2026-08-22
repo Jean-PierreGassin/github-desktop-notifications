@@ -36,6 +36,20 @@ struct WorkHoursTests {
         #expect(!makeSharedHours().isWithinHours(date(day: 25, hour: 12), calendar: calendar))
     }
 
+    @Test(arguments: [0, 8, 12, 23])
+    func letsNotificationsThroughAtAnyTimeOnRoundTheClockDays(hour: Int) {
+        let hours = makeSharedHours(start: 0, end: 0)
+
+        #expect(hours.isWithinHours(date(day: 20, hour: hour), calendar: calendar))
+    }
+
+    @Test
+    func roundTheClockHoursStillRespectDaysThatAreTurnedOff() {
+        let hours = makeSharedHours(start: 0, end: 0)
+
+        #expect(!hours.isWithinHours(date(day: 25, hour: 12), calendar: calendar))
+    }
+
     @Test
     func holdsEverythingWhenNoDaysAreSelected() {
         var hours = makeSharedHours()

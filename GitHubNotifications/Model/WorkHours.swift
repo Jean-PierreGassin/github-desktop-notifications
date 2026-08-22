@@ -144,6 +144,10 @@ struct WorkHours: Sendable, Equatable, Codable {
             return false
         }
 
+        if daySchedule.isRoundTheClock {
+            return !allowingWrap
+        }
+
         let runsPastMidnight = daySchedule.startMinutes > daySchedule.endMinutes
 
         guard runsPastMidnight else {
