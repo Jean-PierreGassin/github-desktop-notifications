@@ -5,12 +5,21 @@
 # shells, direnv) make xcodebuild link with the wrong linker and SDK, so they are
 # stripped before every invocation.
 
-set -euo pipefail
-
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="${PROJECT_ROOT}/GitHubNotifications.xcodeproj"
 SCHEME="GitHubNotifications"
 DERIVED_DATA="${PROJECT_ROOT}/build"
+
+resolve_configuration() {
+  case "${1:-debug}" in
+    debug) printf '%s\n' "Debug" ;;
+    release) printf '%s\n' "Release" ;;
+    *)
+      printf '%s\n' "expected debug or release, received: $1" >&2
+      return 2
+      ;;
+  esac
+}
 
 ## Resolves a real Xcode toolchain, ignoring a DEVELOPER_DIR pointing at a
 ## standalone SDK that cannot build app bundles.
