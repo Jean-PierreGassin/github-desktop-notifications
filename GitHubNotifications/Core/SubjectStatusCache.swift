@@ -26,6 +26,7 @@ final class SubjectStatusCache {
     private var statuses: [String: SubjectStatus] = [:]
     private var fetchedFor: [String: Date] = [:]
     private var inFlight: Set<String> = []
+    private var generation = 0
 
     init(api: GitHubAPI, auth: AuthService, log: AppLog) {
         self.api = api
@@ -62,6 +63,7 @@ final class SubjectStatusCache {
     /// Signing out must not leave the next account looking at the last one's
     /// pull requests.
     func clear() {
+        generation += 1
         statuses = [:]
         fetchedFor = [:]
         inFlight = []
@@ -82,20 +84,27 @@ final class SubjectStatusCache {
 
         let identifier = thread.id
         let updatedAt = thread.updatedAt
+        let fetchGeneration = generation
 
         inFlight.insert(identifier)
 
         Task { [weak self] in
-            defer { self?.inFlight.remove(identifier) }
-
             guard let status = try? await self?.api.fetchSubjectStatus(at: subjectURL, usingToken: token) else {
-                // Recorded as read anyway, so a subject this token cannot see is
-                // not asked for again on every redraw of the panel.
+                guard self?.generation == fetchGeneration else {
+                    return
+                }
+
+                self?.inFlight.remove(identifier)
                 self?.fetchedFor[identifier] = updatedAt
                 self?.log.debug("Couldn't read the status of \(subjectURL.lastPathComponent).")
                 return
             }
 
+            guard self?.generation == fetchGeneration else {
+                return
+            }
+
+            self?.inFlight.remove(identifier)
             self?.statuses[identifier] = status
             self?.fetchedFor[identifier] = updatedAt
         }

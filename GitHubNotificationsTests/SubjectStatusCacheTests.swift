@@ -116,6 +116,20 @@ struct SubjectStatusCacheTests {
         #expect(cache.status(for: pullRequest) == nil)
     }
 
+    @Test
+    func ignoresAStatusFetchedBeforeTheCacheWasCleared() async throws {
+        let api = FakeGitHubAPI()
+        api.subjectStatusResult = .success(.merged)
+        api.subjectStatusDelay = .milliseconds(50)
+        let cache = await makeCache(api: api)
+        _ = cache.status(for: pullRequest)
+
+        cache.clear()
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(cache.status(for: pullRequest) == nil)
+    }
+
     private func makeCache(api: FakeGitHubAPI) async -> SubjectStatusCache {
         let log = AppLog(subsystem: "tests")
         let auth = AuthService(api: api, storage: InMemoryTokenStorage(), log: log)
