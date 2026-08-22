@@ -7,6 +7,7 @@ import SwiftUI
 /// shape the user types and tidies it up once they commit.
 struct TimeField: View {
     let label: String?
+    let accessibilityLabel: String
 
     @Binding var minutes: Int
 
@@ -23,6 +24,7 @@ struct TimeField: View {
             }
 
             TextField("", text: $text)
+                .accessibilityLabel(accessibilityLabel)
                 .textFieldStyle(.roundedBorder)
                 .font(.callout)
                 .frame(width: 88)
