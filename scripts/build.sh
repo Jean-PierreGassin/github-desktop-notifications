@@ -11,14 +11,10 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-case "${1:-debug}" in
-  debug) CONFIGURATION="Debug" ;;
-  release) CONFIGURATION="Release" ;;
-  *)
-    echo "usage: scripts/build.sh [debug|release] [extra xcodebuild settings...]" >&2
-    exit 2
-    ;;
-esac
+CONFIGURATION="$(resolve_configuration "${1:-debug}")" || {
+  printf '%s\n' "usage: scripts/build.sh [debug|release] [extra xcodebuild settings...]" >&2
+  exit 2
+}
 
 if (( $# > 0 )); then
   shift
