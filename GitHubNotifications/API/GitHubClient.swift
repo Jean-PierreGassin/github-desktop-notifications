@@ -34,6 +34,12 @@ protocol GitHubAPI: Sendable {
     ///
     /// - Throws: ``GitHubError`` when GitHub rejects the request or the network fails.
     func fetchSubjectStatus(at subjectURL: URL, usingToken token: String) async throws -> SubjectStatus
+
+    /// Reads the newest events on a pull request or issue, which is the only
+    /// place GitHub records what happened on it and who did it.
+    ///
+    /// - Throws: ``GitHubError`` when GitHub rejects the request or the network fails.
+    func fetchTimeline(at timelineURL: URL, usingToken token: String) async throws -> [TimelineEvent]
 }
 
 struct GitHubClient: GitHubAPI {

@@ -101,11 +101,28 @@ struct ThreadAnnouncement: Sendable, Equatable, Codable, Identifiable {
     let thread: NotificationThread
     let update: ThreadUpdate
 
+    /// What the thread's timeline says happened, once it has been read.
+    var activity: ThreadActivity?
+
     var id: String { thread.id }
 
     /// Why this thread reached the user and what has moved on it, worded exactly
     /// as its row in the panel words it.
     var caption: String {
-        update.caption(for: thread.reason)
+        ThreadCaption.make(for: thread.reason, update: update, activity: activity)
+    }
+}
+
+/// The one line both the panel row and the alert print about a thread.
+///
+/// What the timeline says happened wins over what the inbox alone can guess,
+/// because the guess can only ever say "New activity".
+enum ThreadCaption {
+    static func make(for reason: NotificationReason, update: ThreadUpdate?, activity: ThreadActivity?) -> String {
+        if let activity {
+            return activity.caption(for: reason)
+        }
+
+        return update?.caption(for: reason) ?? reason.displayName
     }
 }

@@ -42,6 +42,14 @@ final class AuthService {
         return false
     }
 
+    var signedInLogin: String? {
+        guard case let .signedIn(user) = state else {
+            return nil
+        }
+
+        return user.account.login
+    }
+
     var canAttemptSignIn: Bool {
         guard let nextAttemptAllowedAt else {
             return true

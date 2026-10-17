@@ -64,12 +64,15 @@ final class NotificationStore {
     /// ledger of what has already been announced.
     private(set) var latestUpdates: [String: ThreadUpdate] = [:]
 
-    var rowsPerRepository: Int {
-        didSet { regroup() }
-    }
+    /// Each repository scrolls in the panel, so every thread gets a row. This
+    /// only bounds how many read rows are kept, so the read ledger cannot grow
+    /// without limit if reconciliation never runs.
+    static let defaultRowsKeptPerRepository = 50
 
-    init(rowsPerRepository: Int = 5, readLedger: ReadThreadLedger) {
-        self.rowsPerRepository = rowsPerRepository
+    private let rowsKeptPerRepository: Int
+
+    init(rowsKeptPerRepository: Int = NotificationStore.defaultRowsKeptPerRepository, readLedger: ReadThreadLedger) {
+        self.rowsKeptPerRepository = rowsKeptPerRepository
         self.readLedger = readLedger
     }
 
@@ -216,6 +219,6 @@ final class NotificationStore {
     }
 
     private func makeGroups() -> [RepositoryGroup] {
-        NotificationGrouping.makeGroups(from: threads, rowsPerRepository: rowsPerRepository)
+        NotificationGrouping.makeGroups(from: threads, rowsPerRepository: rowsKeptPerRepository)
     }
 }
