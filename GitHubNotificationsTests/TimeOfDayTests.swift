@@ -18,7 +18,7 @@ struct TimeOfDayTests {
         ("1430", 14 * 60 + 30),
         ("14:30", 14 * 60 + 30),
         ("  17:05  ", 17 * 60 + 5),
-    ])
+    ] as [(String, Int)])
     func acceptsTheWaysPeopleActuallyTypeATime(input: String, expectedMinutes: Int) {
         #expect(TimeOfDay.parse(input) == expectedMinutes)
     }
