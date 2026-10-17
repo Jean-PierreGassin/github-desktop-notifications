@@ -2,13 +2,12 @@ import Combine
 import SwiftUI
 
 struct InboxPanel: View {
-    private static let panelWidth: CGFloat = 410
+    private static let panelWidth: CGFloat = 460
 
-    /// The panel is a popover, not a window: past about three quarters of the
-    /// screen it stops growing and scrolls instead of running off the display.
-    private static let maximumScreenFraction: CGFloat = 0.75
-    private static let fallbackMaximumHeight: CGFloat = 700
-    private static let overflowFadeHeight: CGFloat = 24
+    /// The panel is a popover, not a window: past most of the screen it stops
+    /// growing and scrolls instead of running off the display.
+    private static let maximumScreenFraction: CGFloat = 0.85
+    private static let fallbackMaximumHeight: CGFloat = 800
 
     let session: AppSession
 
@@ -144,7 +143,7 @@ struct InboxPanel: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(height: Self.maximumListHeight)
-            .overlay(alignment: .bottom) { overflowFade }
+            .overlay(alignment: .bottom) { OverflowFade() }
         } else {
             groupList
         }
@@ -157,8 +156,10 @@ struct InboxPanel: View {
                     group: group,
                     latestUpdates: session.store.latestUpdates,
                     clickBehaviour: session.behaviourPreferences.clickBehaviour,
+                    rowsBeforeScrolling: session.rowsPerRepository,
                     avatars: session.avatars,
                     subjectStatuses: session.subjectStatuses,
+                    activities: session.activities,
                     showsDivider: index > 0,
                     onOpenThread: session.open,
                     onApplyToThread: { behaviour, thread in
@@ -178,26 +179,14 @@ struct InboxPanel: View {
         }
     }
 
-    /// Roughly three quarters of the screen the panel is on, so a long inbox
-    /// still leaves the desktop visible.
+    /// Most of the screen the panel is on, so a long inbox still leaves the
+    /// desktop visible.
     private static var maximumListHeight: CGFloat {
         guard let visibleHeight = NSScreen.main?.visibleFrame.height else {
             return fallbackMaximumHeight
         }
 
         return visibleHeight * maximumScreenFraction
-    }
-
-    /// An overlay scroll bar only appears once you are already scrolling, which
-    /// is no use as a sign that there is more below.
-    private var overflowFade: some View {
-        LinearGradient(
-            colors: [.clear, Color(nsColor: .windowBackgroundColor)],
-            startPoint: .top,
-            endPoint: .bottom,
-        )
-        .frame(height: Self.overflowFadeHeight)
-        .allowsHitTesting(false)
     }
 
     private var emptyState: some View {

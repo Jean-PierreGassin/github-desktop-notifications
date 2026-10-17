@@ -10,9 +10,12 @@ struct ResponseHeaders: Sendable {
     let rateLimitResetAt: Date?
     let retryAfter: TimeInterval?
     let nextPageURL: URL?
+    let lastPageURL: URL?
 
     init(_ response: HTTPURLResponse) {
-        nextPageURL = Self.parseNextPageURL(from: response.value(forHTTPHeaderField: "Link"))
+        let linkHeader = response.value(forHTTPHeaderField: "Link")
+        nextPageURL = Self.parseNextPageURL(from: linkHeader)
+        lastPageURL = Self.parseLastPageURL(from: linkHeader)
         let scopesHeader = response.value(forHTTPHeaderField: "X-OAuth-Scopes") ?? ""
         let resetTimestamp = response.value(forHTTPHeaderField: "X-RateLimit-Reset").flatMap(Double.init)
 
@@ -27,13 +30,21 @@ struct ResponseHeaders: Sendable {
     /// Pulls the `rel="next"` URL out of a `Link` header such as
     /// `<https://api.github.com/notifications?page=2>; rel="next", <…>; rel="last"`.
     static func parseNextPageURL(from linkHeader: String?) -> URL? {
+        parsePageURL(relation: "next", from: linkHeader)
+    }
+
+    static func parseLastPageURL(from linkHeader: String?) -> URL? {
+        parsePageURL(relation: "last", from: linkHeader)
+    }
+
+    private static func parsePageURL(relation: String, from linkHeader: String?) -> URL? {
         guard let linkHeader else {
             return nil
         }
 
         let links = linkHeader.split(separator: ",")
 
-        for link in links where link.contains("rel=\"next\"") {
+        for link in links where link.contains("rel=\"\(relation)\"") {
             guard let start = link.firstIndex(of: "<"), let end = link.firstIndex(of: ">") else {
                 continue
             }

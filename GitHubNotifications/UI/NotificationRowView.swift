@@ -6,10 +6,12 @@ struct NotificationRowView: View {
     /// still start at the same place.
     private static let iconSide: CGFloat = 18
     private static let unreadDotSide: CGFloat = 7
+    private static let cornerRadius: CGFloat = 5
 
     let thread: NotificationThread
     let update: ThreadUpdate?
     let status: SubjectStatus?
+    let activity: ThreadActivity?
     let clickBehaviour: ClickBehaviour
     let onOpen: () -> Void
     let onApply: (ClickBehaviour) -> Void
@@ -18,10 +20,10 @@ struct NotificationRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button(action: onOpen) {
-                rowContent
-            }
-            .buttonStyle(.plain)
+            rowContent
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction(.default, onOpen)
 
             if isHovering {
                 actions
@@ -32,8 +34,13 @@ struct NotificationRowView: View {
         .padding(.horizontal, 6)
         .background(
             isHovering ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear),
-            in: RoundedRectangle(cornerRadius: 5),
+            in: RoundedRectangle(cornerRadius: Self.cornerRadius),
         )
+        // The whole highlighted card opens the thread, padding and the space
+        // beside the hover button included. Only the text used to, which read as
+        // clicks being dropped. The hover button still wins over this.
+        .contentShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .onTapGesture(perform: onOpen)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovering = hovering
@@ -115,7 +122,6 @@ struct NotificationRowView: View {
         }
         .animation(.easeOut(duration: 0.2), value: status)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
     }
 
     /// One button, carrying whatever a click would do, so the button and the row
@@ -147,11 +153,11 @@ struct NotificationRowView: View {
     /// review request, and a row reading the same as it did yesterday is a row
     /// worth ignoring.
     ///
-    /// Built by ``ThreadUpdate/caption(for:)``, which is what the alert for this
+    /// Built by ``ThreadCaption/make(for:update:activity:)``, which is what the alert for this
     /// thread is worded from as well. A row and the banner that sent the user to
     /// it disagreeing about what happened is worse than either being terse.
     private var caption: String {
-        update?.caption(for: thread.reason) ?? thread.reason.displayName
+        ThreadCaption.make(for: thread.reason, update: update, activity: activity)
     }
 
     /// The row truncates, so the tooltip carries everything in full.

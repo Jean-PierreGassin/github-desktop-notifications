@@ -21,13 +21,15 @@ final class AppSession {
     let launchAtLogin: LaunchAtLogin
     let avatars: AvatarCache
     let subjectStatuses: SubjectStatusCache
+    let activities: ThreadActivityCache
     let updatePreferences: UpdatePreferences
     let updates: UpdateChecker
 
-    static let defaultRowsPerRepository = 10
+    /// How many rows a repository shows before it scrolls. Every thread has a
+    /// row; past this many the repository scrolls on its own rather than
+    /// pushing every other repository off the panel.
+    static let defaultRowsPerRepository = 5
 
-    /// Read rows count against this limit as well as unread ones, so it is lower
-    /// than it was: ten rows of one repository is already a wall of text.
     static let rowsPerRepositoryLimits = 1 ... 10
 
     private static let rowsPerRepositoryKey = "rowsPerRepository"
@@ -90,14 +92,11 @@ final class AppSession {
         self.debugInbox = debugInbox
         #endif
 
-        let storedRowsPerRepository = defaults.integer(forKey: Self.rowsPerRepositoryKey)
+        rowsPerRepository = Self.clampRowsPerRepository(defaults.integer(forKey: Self.rowsPerRepositoryKey))
 
         auth = AuthService(api: api, storage: storage, log: log)
         readLedger = ReadThreadLedger(fileURL: supportDirectory?.appending(path: "read-threads.json"), log: log)
-        store = NotificationStore(
-            rowsPerRepository: Self.clampRowsPerRepository(storedRowsPerRepository),
-            readLedger: readLedger,
-        )
+        store = NotificationStore(readLedger: readLedger)
         notifier = Notifier(log: log)
         alertPreferences = AlertPreferences(defaults: defaults)
         ownerPreferences = OwnerPreferences(defaults: defaults)
@@ -109,6 +108,7 @@ final class AppSession {
         ledger = SeenThreadLedger(fileURL: supportDirectory?.appending(path: "seen-threads.json"), log: log)
         avatars = AvatarCache(directory: supportDirectory?.appending(path: "avatars"), log: log)
         subjectStatuses = SubjectStatusCache(api: api, auth: auth, log: log)
+        activities = ThreadActivityCache(api: api, auth: auth, log: log)
         updatePreferences = UpdatePreferences(defaults: defaults)
         updates = UpdateChecker(source: releases, preferences: updatePreferences, log: log)
         poller = Poller(
@@ -154,14 +154,11 @@ final class AppSession {
         }
     }
 
-    var rowsPerRepository: Int {
-        get { store.rowsPerRepository }
-        set {
-            let clamped = Self.clampRowsPerRepository(newValue)
+    private(set) var rowsPerRepository: Int
 
-            store.rowsPerRepository = clamped
-            defaults.set(clamped, forKey: Self.rowsPerRepositoryKey)
-        }
+    func setRowsPerRepository(_ newValue: Int) {
+        rowsPerRepository = Self.clampRowsPerRepository(newValue)
+        defaults.set(rowsPerRepository, forKey: Self.rowsPerRepositoryKey)
     }
 
     /// A value stored before the limit dropped to ten is clamped on read rather
@@ -177,7 +174,7 @@ final class AppSession {
     /// The menu bar section's reset. Launching at login is a system registration
     /// rather than a stored value, so it is turned off rather than forgotten.
     func resetMenuBarPreferences() {
-        rowsPerRepository = Self.defaultRowsPerRepository
+        setRowsPerRepository(Self.defaultRowsPerRepository)
         launchAtLogin.isEnabled = false
     }
 
@@ -361,9 +358,14 @@ final class AppSession {
             && alertPreferences.allowsAlert(about: announcement.update, on: announcement.thread.reason)
     }
 
+    /// Each alert waits for its thread's timeline, so it says what actually
+    /// happened rather than repeating why the thread is in the inbox.
     private func post(_ announcements: [ThreadAnnouncement]) async {
         for announcement in NotificationGrouping.sortByPriorityThenRecency(announcements) {
-            await notifier.announce(announcement, settings: notificationContentPreferences.settings)
+            var described = announcement
+            described.activity = await activities.describe(announcement.thread)
+
+            await notifier.announce(described, settings: notificationContentPreferences.settings)
         }
     }
 
@@ -428,6 +430,7 @@ final class AppSession {
         ledger.clear()
         heldAlerts.clear()
         subjectStatuses.clear()
+        activities.clear()
         ownerPreferences.forgetKnownOwners()
         auth.signOut()
     }

@@ -10,6 +10,7 @@ struct NotificationsResponse: Sendable {
 extension GitHubClient {
     private static let threadsPerPage = 50
     private static let pageLimit = 5
+    private static let timelineEventsPerPage = 100
 
     /// Asks conditionally first, then fetches the whole inbox when something has
     /// changed.
@@ -119,6 +120,39 @@ extension GitHubClient {
         }
 
         return status.status
+    }
+
+    /// Only the newest page is wanted, and the timeline is oldest first, so a
+    /// long one is read from its last page rather than from the start.
+    func fetchTimeline(at timelineURL: URL, usingToken token: String) async throws -> [TimelineEvent] {
+        var components = URLComponents(url: timelineURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "per_page", value: String(Self.timelineEventsPerPage))]
+
+        let firstPageRequest = makeRequest(url: components?.url ?? timelineURL, token: token)
+        let (firstPageData, firstPageResponse, firstPageHeaders) = try await send(firstPageRequest)
+        try throwIfUnsuccessful(response: firstPageResponse, headers: firstPageHeaders)
+
+        guard let lastPageURL = firstPageHeaders.lastPageURL else {
+            return try decodeTimeline(from: firstPageData)
+        }
+
+        let lastPageRequest = makeRequest(url: lastPageURL, token: token)
+        let (lastPageData, lastPageResponse, lastPageHeaders) = try await send(lastPageRequest)
+        try throwIfUnsuccessful(response: lastPageResponse, headers: lastPageHeaders)
+
+        return try decodeTimeline(from: lastPageData)
+    }
+
+    /// - Throws: ``GitHubError/malformedResponse`` when the payload does not decode.
+    private func decodeTimeline(from data: Data) throws -> [TimelineEvent] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        guard let events = try? decoder.decode([TimelineEvent].self, from: data) else {
+            throw GitHubError.malformedResponse
+        }
+
+        return events
     }
 
     /// - Throws: ``GitHubError/malformedResponse`` when the payload does not decode.

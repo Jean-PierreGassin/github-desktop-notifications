@@ -43,6 +43,15 @@ struct ResponseHeadersTests {
     }
 
     @Test
+    func findsTheLastPageLink() {
+        let linkHeader = "<https://api.github.com/notifications?page=2>; rel=\"next\", "
+            + "<https://api.github.com/notifications?page=9>; rel=\"last\""
+
+        #expect(ResponseHeaders.parseLastPageURL(from: linkHeader)?.absoluteString
+            == "https://api.github.com/notifications?page=9")
+    }
+
+    @Test
     func findsNoNextPageOnTheLastPage() {
         let linkHeader = "<https://api.github.com/notifications?page=1>; rel=\"prev\", "
             + "<https://api.github.com/notifications?page=1>; rel=\"first\""

@@ -70,7 +70,7 @@ enum Fixtures {
     }
 
     @MainActor
-    static func store(rowsPerRepository: Int = 5, readLedger: ReadThreadLedger? = nil) -> NotificationStore {
-        NotificationStore(rowsPerRepository: rowsPerRepository, readLedger: readLedger ?? Fixtures.readLedger())
+    static func store(rowsKeptPerRepository: Int = 5, readLedger: ReadThreadLedger? = nil) -> NotificationStore {
+        NotificationStore(rowsKeptPerRepository: rowsKeptPerRepository, readLedger: readLedger ?? Fixtures.readLedger())
     }
 }

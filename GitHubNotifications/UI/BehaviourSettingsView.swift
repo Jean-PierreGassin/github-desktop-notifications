@@ -19,7 +19,7 @@ struct BehaviourSettingsView: View {
         Section {
             Toggle("Open at login", isOn: launchAtLoginBinding)
 
-            LabeledContent("Notifications shown per repository") {
+            LabeledContent("Rows shown before a repository scrolls") {
                 HStack(spacing: 6) {
                     TextField("", value: rowsPerRepositoryBinding, format: .number)
                         .textFieldStyle(.roundedBorder)
@@ -33,7 +33,7 @@ struct BehaviourSettingsView: View {
         } header: {
             SettingsSectionHeader(title: "Menu bar") { session.resetMenuBarPreferences() }
         } footer: {
-            Text("Anything beyond the limit is summarised, with a link to your inbox on github.com.")
+            Text("Every notification gets a row. A repository with more than this scrolls on its own.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -132,7 +132,7 @@ struct BehaviourSettingsView: View {
     private var rowsPerRepositoryBinding: Binding<Int> {
         Binding(
             get: { session.rowsPerRepository },
-            set: { session.rowsPerRepository = $0 },
+            set: { session.setRowsPerRepository($0) },
         )
     }
 }

@@ -33,7 +33,7 @@ struct NotificationStoreTests {
 
     @Test
     func forgetsAReadRowOnceItNoLongerFits() {
-        let store = Fixtures.store(rowsPerRepository: 2)
+        let store = Fixtures.store(rowsKeptPerRepository: 2)
         store.replaceAll(with: [
             Fixtures.thread(id: "1"),
             Fixtures.thread(id: "2"),
